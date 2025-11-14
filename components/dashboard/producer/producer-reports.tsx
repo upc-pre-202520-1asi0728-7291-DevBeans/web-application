@@ -91,6 +91,27 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
     C: 0
   }
 
+  // ✅ Helper para obtener la calidad del lote
+  const getLotQuality = (session: ClassificationSession): string => {
+    // Prioridad 1: predominant_category
+    if (session.classification_result?.predominant_category) {
+      return session.classification_result.predominant_category
+    }
+
+    // Prioridad 2: lot_quality (legacy)
+    if (session.classification_result?.lot_quality) {
+      return session.classification_result.lot_quality
+    }
+
+    // Fallback: Calcular desde overall_batch_quality
+    const quality = session.classification_result?.overall_batch_quality || 0
+    if (quality >= 90) return 'Specialty'
+    if (quality >= 80) return 'Premium'
+    if (quality >= 70) return 'A'
+    if (quality >= 60) return 'B'
+    return 'C'
+  }
+
   return (
       <div className="space-y-6">
         {/* Header */}
@@ -346,7 +367,7 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
                     <div>
                       <p className="font-medium text-gray-900">{session.session_id_vo}</p>
                       <p className="text-sm text-gray-500">
-                        Lote #{session.coffee_lot_id} • {session.total_grains_analyzed} granos • {session.classification_result?.lot_quality || 'N/A'}
+                        Lote #{session.coffee_lot_id} • {session.total_grains_analyzed} granos • {getLotQuality(session)}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
                         {new Date(session.created_at).toLocaleDateString('es-PE', {

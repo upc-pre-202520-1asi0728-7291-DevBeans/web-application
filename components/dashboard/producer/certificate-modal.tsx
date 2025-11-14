@@ -146,31 +146,31 @@ export function CertificateModal({ session, open, onOpenChange }: CertificateMod
                                 <div className="bg-emerald-50 p-2 rounded">
                                     <div className="text-gray-600">Especial</div>
                                     <div className="font-semibold text-emerald-700">
-                                        {session.classification_result?.category_distribution?.Specialty || 0}
+                                        {session.classification_result?.category_distribution?.Specialty?.count || 0}
                                     </div>
                                 </div>
                                 <div className="bg-green-50 p-2 rounded">
                                     <div className="text-gray-600">Premium</div>
                                     <div className="font-semibold text-green-700">
-                                        {session.classification_result?.category_distribution?.Premium || 0}
+                                        {session.classification_result?.category_distribution?.Premium?.count || 0}
                                     </div>
                                 </div>
                                 <div className="bg-blue-50 p-2 rounded">
                                     <div className="text-gray-600">Calidad A</div>
                                     <div className="font-semibold text-blue-700">
-                                        {session.classification_result?.category_distribution?.A || 0}
+                                        {session.classification_result?.category_distribution?.A?.count || 0}
                                     </div>
                                 </div>
                                 <div className="bg-amber-50 p-2 rounded">
                                     <div className="text-gray-600">Calidad B</div>
                                     <div className="font-semibold text-amber-700">
-                                        {session.classification_result?.category_distribution?.B || 0}
+                                        {session.classification_result?.category_distribution?.B?.count || 0}
                                     </div>
                                 </div>
                                 <div className="bg-red-50 p-2 rounded col-span-2">
                                     <div className="text-gray-600">Calidad C</div>
                                     <div className="font-semibold text-red-700">
-                                        {session.classification_result?.category_distribution?.C || 0}
+                                        {session.classification_result?.category_distribution?.C?.count || 0}
                                     </div>
                                 </div>
                             </div>
