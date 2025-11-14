@@ -1,6 +1,7 @@
 // lib/services/classification.service.ts
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://bean-detect-ai-api-platform.azurewebsites.net';
+//const API_BASE_URL = 'http://localhost:8000';
 
 // ============================================
 // INTERFACES - Clasificación

@@ -1,7 +1,7 @@
 // lib/services/coffee-lot.service.ts
 
-//const API_BASE_URL = "https://bean-detect-ai-api-platform.azurewebsites.net/api/v1/coffee-lots";
-const API_BASE_URL = "http://localhost:8000/api/v1/coffee-lots";
+const API_BASE_URL = "https://bean-detect-ai-api-platform.azurewebsites.net/api/v1/coffee-lots";
+//const API_BASE_URL = "http://localhost:8000/api/v1/coffee-lots";
 
 // Enums
 export enum CoffeeVariety {

@@ -1,7 +1,7 @@
 // lib/services/auth.service.ts
 
-//const BASE_URL = "https://bean-detect-ai-api-platform.azurewebsites.net/api/v1/auth";
-const BASE_URL = 'http://localhost:8000/api/v1/auth';
+const BASE_URL = 'https://bean-detect-ai-api-platform.azurewebsites.net/api/v1/auth';
+//const BASE_URL = 'http://localhost:8000/api/v1/auth';
 
 // Atributos para el registro de productor
 export interface RegisterProducerData {
