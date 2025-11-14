@@ -59,17 +59,34 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
     const getQualityColor = (category: string) => {
         switch (category) {
             case "Specialty":
-                return "bg-purple-100 text-purple-800"
+                return "bg-purple-100 text-purple-800 border-purple-300"
             case "Premium":
-                return "bg-blue-100 text-blue-800"
+                return "bg-blue-100 text-blue-800 border-blue-300"
             case "A":
-                return "bg-green-100 text-green-800"
+                return "bg-green-100 text-green-800 border-green-300"
             case "B":
-                return "bg-yellow-100 text-yellow-800"
+                return "bg-yellow-100 text-yellow-800 border-yellow-300"
             case "C":
-                return "bg-orange-100 text-orange-800"
+                return "bg-orange-100 text-orange-800 border-orange-300"
             default:
-                return "bg-gray-100 text-gray-800"
+                return "bg-gray-100 text-gray-800 border-gray-300"
+        }
+    }
+
+    const getProgressBarColor = (category: string) => {
+        switch (category) {
+            case "Specialty":
+                return "bg-purple-600"
+            case "Premium":
+                return "bg-blue-600"
+            case "A":
+                return "bg-green-600"
+            case "B":
+                return "bg-yellow-300"
+            case "C":
+                return "bg-amber-600"
+            default:
+                return "bg-gray-600"
         }
     }
 
@@ -91,6 +108,41 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
             </div>
         )
     }
+
+    // Calcular la calidad general con múltiples fallbacks
+    const getOverallQuality = (): number => {
+        const result = session.classification_result
+
+        // Debug: Ver qué datos tenemos
+        console.log('Classification Result:', result)
+
+        // 1. Si overall_batch_quality existe y no es null
+        if (result?.overall_batch_quality !== undefined && result.overall_batch_quality !== null) {
+            const value = result.overall_batch_quality
+            // Si está en escala 0-1, convertir a 0-100
+            return value <= 1 ? value * 100 : value
+        }
+
+        // 2. Si average_score existe (está en escala 0-1)
+        if (result?.average_score !== undefined && result.average_score !== null) {
+            return result.average_score * 100
+        }
+
+        // 3. Calcular manualmente desde los análisis individuales
+        if (session.analyses && session.analyses.length > 0) {
+            const sum = session.analyses.reduce((acc, analysis) => acc + (analysis.final_score || 0), 0)
+            return (sum / session.analyses.length) * 100
+        }
+
+        return 0
+    }
+
+    const overallQuality = getOverallQuality()
+
+    // Ordenar categorías en el orden correcto
+    const categoryOrder = ['Specialty', 'Premium', 'A', 'B', 'C']
+    const sortedCategories = Object.entries(session.classification_result?.category_distribution || {})
+        .sort(([a], [b]) => categoryOrder.indexOf(a) - categoryOrder.indexOf(b))
 
     return (
         <div className="space-y-6">
@@ -154,19 +206,11 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
                                 <span>Calidad General</span>
                             </div>
                             <p className="text-3xl font-bold text-amber-700">
-                                {session.classification_result?.overall_batch_quality?.toFixed(1) || 'N/A'}%
+                                {overallQuality.toFixed(1)}%
                             </p>
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <TrendingUp className="h-4 w-4" />
-                                <span>Categoría Predominante</span>
-                            </div>
-                            <Badge className={getQualityColor(session.classification_result?.predominant_category || '')}>
-                                {session.classification_result?.predominant_category || 'N/A'}
-                            </Badge>
-                        </div>
+                        <div className="space-y-2"></div>
 
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -185,26 +229,31 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
                     <div className="space-y-3">
                         <h4 className="font-semibold text-gray-900">Distribución por Categoría</h4>
                         <div className="space-y-2">
-                            {Object.entries(session.classification_result?.category_distribution || {}).map(([category, data]: [string, any]) => (
-                                <div key={category} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Badge className={getQualityColor(category)} variant="outline">
-                                            {category}
-                                        </Badge>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                    <span className="text-sm text-gray-600">
-                      {data.count} granos ({data.percentage?.toFixed(1)}%)
-                    </span>
-                                        <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-amber-600"
-                                                style={{ width: `${data.percentage}%` }}
-                                            />
+                            {sortedCategories.map(([category, data]: [string, any]) => {
+                                // Solo mostrar categorías que tienen granos
+                                if (data.count === 0) return null
+
+                                return (
+                                    <div key={category} className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Badge className={getQualityColor(category)} variant="outline">
+                                                {category}
+                                            </Badge>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-sm text-gray-600">
+                                                {data.count} granos ({data.percentage?.toFixed(1)}%)
+                                            </span>
+                                            <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full ${getProgressBarColor(category)}`}
+                                                    style={{ width: `${data.percentage}%` }}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
                 </CardContent>
@@ -296,14 +345,8 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-sm text-gray-600">Puntuación:</span>
                                                     <span className="font-semibold text-amber-700">
-                            {(selectedGrain.final_score * 100).toFixed(2)}%
-                          </span>
-                                                </div>
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-sm text-gray-600">Score Base:</span>
-                                                    <span className="font-semibold">
-                            {(selectedGrain.quality_assessment?.base_score * 100).toFixed(2)}%
-                          </span>
+                                                        {(selectedGrain.final_score * 100).toFixed(2)}%
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
@@ -321,9 +364,9 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
                                                     <div key={color} className="flex items-center justify-between">
                                                         <span className="text-sm text-gray-600">{color}:</span>
                                                         <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold">
-                                {(percentage as number * 100).toFixed(1)}%
-                              </span>
+                                                            <span className="text-sm font-semibold">
+                                                                {((percentage as number)).toFixed(1)}%
+                                                            </span>
                                                             <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
                                                                 <div
                                                                     className="h-full bg-amber-600"
@@ -338,11 +381,11 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
 
                                         <Separator />
 
-                                        {/* Características Físicas */}
+                                        {/* Características */}
                                         <div>
                                             <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                                                 <Ruler className="h-5 w-5" />
-                                                Características Físicas
+                                                Características
                                             </h4>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="space-y-1">
@@ -364,9 +407,18 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
                                                     </p>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <p className="text-xs text-gray-500">Elongación</p>
+                                                    <p className="text-xs text-gray-500">Fecha de Análisis</p>
                                                     <p className="text-sm font-semibold">
-                                                        {selectedGrain.features?.aspect_ratio?.toFixed(3) || 'N/A'}
+                                                        {selectedGrain.created_at
+                                                            ? new Date(selectedGrain.created_at.replace('t', 'T')).toLocaleString("es-PE", {
+                                                                day: "2-digit",
+                                                                month: "short",
+                                                                year: "numeric",
+                                                                hour: "2-digit",
+                                                                minute: "2-digit",
+                                                                hour12: false
+                                                            })
+                                                            : "N/A"}
                                                     </p>
                                                 </div>
                                             </div>
@@ -375,30 +427,31 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
                                         <Separator />
 
                                         {/* Factores de Ajuste */}
-                                        {selectedGrain.quality_assessment?.adjustments && (
-                                            <div>
-                                                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                                    <BarChart3 className="h-5 w-5" />
-                                                    Factores de Ajuste
-                                                </h4>
-                                                <div className="space-y-2">
-                                                    {Object.entries(selectedGrain.quality_assessment.adjustments).map(([factor, value]) => (
-                                                        <div key={factor} className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600 capitalize">
-                                {factor.replace(/_/g, ' ')}:
-                              </span>
-                                                            <span className={`text-sm font-semibold ${
-                                                                (value as number) > 0 ? 'text-green-600' :
-                                                                    (value as number) < 0 ? 'text-red-600' :
-                                                                        'text-gray-600'
-                                                            }`}>
-                                {(value as number) > 0 ? '+' : ''}{((value as number) * 100).toFixed(2)}%
-                              </span>
-                                                        </div>
-                                                    ))}
+                                        {selectedGrain.quality_assessment?.adjustments &&
+                                            Object.keys(selectedGrain.quality_assessment.adjustments).length > 0 && (
+                                                <div>
+                                                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                        <BarChart3 className="h-5 w-5" />
+                                                        Factores de Ajuste
+                                                    </h4>
+                                                    <div className="space-y-2">
+                                                        {Object.entries(selectedGrain.quality_assessment.adjustments).map(([factor, value]) => (
+                                                            <div key={factor} className="flex justify-between items-center">
+                                                            <span className="text-sm text-gray-600 capitalize">
+                                                                {factor.replace(/_/g, ' ')}:
+                                                            </span>
+                                                                <span className={`text-sm font-semibold ${
+                                                                    (value as number) > 0 ? 'text-green-600' :
+                                                                        (value as number) < 0 ? 'text-red-600' :
+                                                                            'text-gray-600'
+                                                                }`}>
+                                                                {(value as number) > 0 ? '+' : ''}{((value as number) * 100).toFixed(2)}%
+                                                            </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
+                                            )}
                                     </div>
                                 </div>
                             )}
@@ -418,8 +471,8 @@ export function SessionDetails({ sessionId, lotId }: SessionDetailsProps) {
                                     Anterior
                                 </Button>
                                 <span className="text-sm text-gray-600">
-                  Grano {(session.analyses.findIndex(a => a.id === selectedGrain?.id) + 1)} de {session.analyses.length}
-                </span>
+                                    Grano {(session.analyses.findIndex(a => a.id === selectedGrain?.id) + 1)} de {session.analyses.length}
+                                </span>
                                 <Button
                                     variant="outline"
                                     onClick={() => {

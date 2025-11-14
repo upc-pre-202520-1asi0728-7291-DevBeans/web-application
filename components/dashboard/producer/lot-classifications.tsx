@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, TrendingUp, Calendar, Beaker, Award } from "lucide-react"
+import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, Calendar, Beaker, Award } from "lucide-react"
 import { classificationService, type ClassificationSession } from "@/lib/services/classification.service"
 import { coffeeLotService, type CoffeeLot } from "@/lib/services/coffee-lot.service"
 
@@ -37,6 +37,17 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
     useEffect(() => {
         loadData()
     }, [lotId])
+
+    // 🔧 NUEVO: Reset completo cuando se cierra el diálogo
+    useEffect(() => {
+        if (!isUploadOpen) {
+            // Resetear TODOS los estados cuando se cierra el diálogo
+            setSelectedFile(null)
+            setIsProcessing(false)
+            setShowSuccess(false)
+            setError("")
+        }
+    }, [isUploadOpen])
 
     const loadData = async () => {
         setIsLoading(true)
@@ -96,13 +107,30 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             // Esperar 2 segundos y recargar
             setTimeout(() => {
                 setIsUploadOpen(false)
-                setShowSuccess(false)
-                setSelectedFile(null)
+                // Los estados se resetearán automáticamente por el useEffect
                 loadData()
             }, 2000)
         } catch (err: any) {
             setError(err.message || "Error al procesar la imagen")
+            // 🔧 CRÍTICO: Resetear isProcessing en caso de error
             setIsProcessing(false)
+        }
+    }
+
+    // 🔧 NUEVO: Función para abrir el diálogo limpio
+    const handleOpenUploadDialog = () => {
+        // Asegurar que todo esté limpio antes de abrir
+        setSelectedFile(null)
+        setIsProcessing(false)
+        setShowSuccess(false)
+        setError("")
+        setIsUploadOpen(true)
+    }
+
+    // 🔧 NUEVO: Función para cerrar el diálogo con reset
+    const handleCloseUploadDialog = () => {
+        if (!isProcessing) {
+            setIsUploadOpen(false)
         }
     }
 
@@ -123,22 +151,33 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         }
     }
 
-    const getQualityColor = (category: string) => {
-        switch (category) {
-            case "Specialty":
-                return "text-purple-600"
-            case "Premium":
-                return "text-blue-600"
-            case "A":
-                return "text-green-600"
-            case "B":
-                return "text-yellow-600"
-            case "C":
-                return "text-orange-600"
-            default:
-                return "text-gray-600"
+
+    const getSessionQuality = (session: ClassificationSession): number => {
+        const result = session.classification_result
+
+        if (result?.overall_batch_quality !== undefined && result.overall_batch_quality !== null) {
+            const value = result.overall_batch_quality
+            return value <= 1 ? value * 100 : value
         }
+
+        if (result?.average_score !== undefined && result.average_score !== null) {
+            return result.average_score * 100
+        }
+
+        if (session.analyses && session.analyses.length > 0) {
+            const sum = session.analyses.reduce((acc: number, analysis: any) =>
+                acc + (analysis.final_score || 0), 0)
+            return (sum / session.analyses.length) * 100
+        }
+
+        return 0
     }
+
+    const totalGrains = sessions.reduce((acc, s) => acc + s.total_grains_analyzed, 0)
+    const averageQuality = sessions.length > 0
+        ? sessions.reduce((acc, s) => acc + getSessionQuality(s), 0) / sessions.length
+        : 0
+    const lastSession = sessions.length > 0 ? sessions[0] : null
 
     if (isLoading) {
         return (
@@ -194,22 +233,18 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                             </div>
                             <div className="text-center">
                                 <p className="text-sm text-gray-500">Granos Analizados</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                    {sessions.reduce((acc, s) => acc + s.total_grains_analyzed, 0)}
-                                </p>
+                                <p className="text-2xl font-bold text-gray-900">{totalGrains}</p>
                             </div>
                             <div className="text-center">
                                 <p className="text-sm text-gray-500">Calidad Promedio</p>
                                 <p className="text-2xl font-bold text-amber-700">
-                                    {(sessions.reduce((acc, s) =>
-                                        acc + (s.classification_result?.overall_batch_quality || 0), 0
-                                    ) / sessions.length).toFixed(1)}%
+                                    {averageQuality.toFixed(1)}%
                                 </p>
                             </div>
                             <div className="text-center">
                                 <p className="text-sm text-gray-500">Última Clasificación</p>
                                 <p className="text-sm font-medium text-gray-900">
-                                    {new Date(sessions[0]?.completed_at || "").toLocaleDateString('es-PE')}
+                                    {lastSession ? new Date(lastSession.completed_at || "").toLocaleDateString('es-PE') : 'N/A'}
                                 </p>
                             </div>
                         </div>
@@ -219,72 +254,66 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
 
             {/* Lista de sesiones */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {sessions.map((session) => (
-                    <Card
-                        key={session.id}
-                        className="cursor-pointer hover:shadow-lg transition-shadow"
-                        onClick={() => handleViewSession(session.id)}
-                    >
-                        <CardHeader>
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <CardTitle className="text-lg">{session.session_id_vo}</CardTitle>
-                                    <CardDescription>
-                                        {new Date(session.created_at).toLocaleDateString('es-PE', {
-                                            day: '2-digit',
-                                            month: 'short',
-                                            year: 'numeric'
-                                        })}
-                                    </CardDescription>
-                                </div>
-                                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusColor(session.status)}`}>
-                  {session.status}
-                </span>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <Beaker className="h-4 w-4" />
-                                        <span>Granos</span>
-                                    </div>
-                                    <span className="font-semibold">{session.total_grains_analyzed}</span>
-                                </div>
+                {sessions.map((session) => {
+                    const quality = getSessionQuality(session)
 
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <TrendingUp className="h-4 w-4" />
-                                        <span>Calidad</span>
+                    return (
+                        <Card
+                            key={session.id}
+                            className="cursor-pointer hover:shadow-lg transition-shadow"
+                            onClick={() => handleViewSession(session.id)}
+                        >
+                            <CardHeader>
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <CardTitle className="text-lg">{session.session_id_vo}</CardTitle>
+                                        <CardDescription>
+                                            {new Date(session.created_at).toLocaleDateString('es-PE', {
+                                                day: '2-digit',
+                                                month: 'short',
+                                                year: 'numeric'
+                                            })}
+                                        </CardDescription>
                                     </div>
-                                    <span className={`font-semibold ${getQualityColor(session.classification_result?.predominant_category || '')}`}>
-                    {session.classification_result?.predominant_category || 'N/A'}
-                  </span>
+                                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusColor(session.status)}`}>
+                                        {session.status}
+                                    </span>
                                 </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                                            <Beaker className="h-4 w-4" />
+                                            <span>Granos</span>
+                                        </div>
+                                        <span className="font-semibold">{session.total_grains_analyzed}</span>
+                                    </div>
 
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <Award className="h-4 w-4" />
-                                        <span>Puntuación</span>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                                            <Award className="h-4 w-4" />
+                                            <span>Puntuación</span>
+                                        </div>
+                                        <span className="font-semibold text-amber-700">
+                                            {quality.toFixed(1)}%
+                                        </span>
                                     </div>
-                                    <span className="font-semibold text-amber-700">
-                    {session.classification_result?.overall_batch_quality?.toFixed(1) || 'N/A'}%
-                  </span>
-                                </div>
 
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <Calendar className="h-4 w-4" />
-                                        <span>Tiempo</span>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                                            <Calendar className="h-4 w-4" />
+                                            <span>Tiempo</span>
+                                        </div>
+                                        <span className="font-semibold">
+                                            {session.processing_time_seconds?.toFixed(1) || 'N/A'}s
+                                        </span>
                                     </div>
-                                    <span className="font-semibold">
-                    {session.processing_time_seconds?.toFixed(1) || 'N/A'}s
-                  </span>
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
+                            </CardContent>
+                        </Card>
+                    )
+                })}
             </div>
 
             {/* Mensaje si no hay sesiones */}
@@ -312,7 +341,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                     <Button
                         className="bg-amber-700 hover:bg-amber-800"
                         size="lg"
-                        onClick={() => setIsUploadOpen(true)}
+                        onClick={handleOpenUploadDialog}
                     >
                         <Upload className="h-4 w-4 mr-2" />
                         Click Aquí
@@ -321,7 +350,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             </Card>
 
             {/* Upload Dialog */}
-            <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+            <Dialog open={isUploadOpen} onOpenChange={handleCloseUploadDialog}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                         <DialogTitle>Nueva Clasificación de Granos</DialogTitle>
@@ -389,7 +418,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                             <DialogFooter>
                                 <Button
                                     variant="outline"
-                                    onClick={() => setIsUploadOpen(false)}
+                                    onClick={handleCloseUploadDialog}
                                     disabled={isProcessing}
                                 >
                                     Cancelar
