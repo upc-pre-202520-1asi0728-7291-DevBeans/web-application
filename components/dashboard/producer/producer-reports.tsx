@@ -1,9 +1,13 @@
 "use client"
 
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Download, QrCode, TrendingUp, AlertCircle, Loader2 } from "lucide-react"
 import { useClassificationReports } from "@/hooks/use-classification-reports"
+import { CertificateModal } from "@/components/dashboard/producer/certificate-modal"
+import { ClassificationSession } from "@/lib/services/classification.service"
+import { certificateService } from "@/lib/services/certificate.service"
 
 interface ProducerReportsProps {
   coffeeLotId?: number
@@ -11,6 +15,17 @@ interface ProducerReportsProps {
 
 export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
   const { data, loading, error } = useClassificationReports(coffeeLotId)
+  const [selectedSession, setSelectedSession] = useState<ClassificationSession | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+
+  const handleViewQR = (session: ClassificationSession) => {
+    setSelectedSession(session)
+    setModalOpen(true)
+  }
+
+  const handleQuickDownload = (session: ClassificationSession) => {
+    certificateService.generatePDF(session)
+  }
 
   if (loading) {
     return (
@@ -344,11 +359,19 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewQR(session)}
+                      >
                         <QrCode className="h-4 w-4 mr-2" />
                         Ver QR
                       </Button>
-                      <Button size="sm" className="bg-amber-700 hover:bg-amber-800">
+                      <Button
+                          size="sm"
+                          className="bg-amber-700 hover:bg-amber-800"
+                          onClick={() => handleQuickDownload(session)}
+                      >
                         <Download className="h-4 w-4 mr-2" />
                         Descargar
                       </Button>
@@ -364,6 +387,13 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
             </div>
           </CardContent>
         </Card>
+
+        {/* Certificate Modal */}
+        <CertificateModal
+            session={selectedSession}
+            open={modalOpen}
+            onOpenChange={setModalOpen}
+        />
 
         {/* Recommendations */}
         <Card>

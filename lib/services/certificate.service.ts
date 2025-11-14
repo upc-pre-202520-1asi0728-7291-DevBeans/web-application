@@ -1,6 +1,7 @@
 // lib/services/certificate.service.ts
 // Versión alternativa usando solo jsPDF (sin qrcode.react)
 
+// @ts-ignore
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { ClassificationSession } from './classification.service'
