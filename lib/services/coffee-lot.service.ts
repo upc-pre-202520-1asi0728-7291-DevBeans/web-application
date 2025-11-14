@@ -1,7 +1,7 @@
 // lib/services/coffee-lot.service.ts
 
-//const BASE_URL = "https://bean-detect-ai-api-platform.azurewebsites.net/api/v1/coffee-lots";
-const BASE_URL = "http://localhost:8000/api/v1/coffee-lots";
+//const API_BASE_URL = "https://bean-detect-ai-api-platform.azurewebsites.net/api/v1/coffee-lots";
+const API_BASE_URL = "http://localhost:8000/api/v1/coffee-lots";
 
 // Enums
 export enum CoffeeVariety {
@@ -89,7 +89,7 @@ class CoffeeLotService {
         if (status) params.append("producer_status", status);
         if (harvestYear) params.append("harvest_year", harvestYear.toString());
 
-        const url = `${BASE_URL}/producer/${producerId}${params.toString() ? `?${params.toString()}` : ""}`;
+        const url = `${API_BASE_URL}/producer/${producerId}${params.toString() ? `?${params.toString()}` : ""}`;
 
         const response = await fetch(url, {
             method: "GET",
@@ -106,7 +106,7 @@ class CoffeeLotService {
 
     // Obtener un lote específico
     async getLotById(lotId: number): Promise<CoffeeLot> {
-        const response = await fetch(`${BASE_URL}/${lotId}`, {
+        const response = await fetch(`${API_BASE_URL}/${lotId}`, {
             method: "GET",
             headers: this.getAuthHeader(),
         });
@@ -121,7 +121,7 @@ class CoffeeLotService {
 
     // Registrar nuevo lote
     async registerLot(data: RegisterCoffeeLotData): Promise<CoffeeLot> {
-        const response = await fetch(BASE_URL, {
+        const response = await fetch(API_BASE_URL, {
             method: "POST",
             headers: this.getAuthHeader(),
             body: JSON.stringify(data),
@@ -137,7 +137,7 @@ class CoffeeLotService {
 
     // Actualizar lote
     async updateLot(lotId: number, data: UpdateCoffeeLotData): Promise<CoffeeLot> {
-        const response = await fetch(`${BASE_URL}/${lotId}`, {
+        const response = await fetch(`${API_BASE_URL}/${lotId}`, {
             method: "PUT",
             headers: this.getAuthHeader(),
             body: JSON.stringify(data),
@@ -153,7 +153,7 @@ class CoffeeLotService {
 
     // Eliminar lote
     async deleteLot(lotId: number, deletionReason: string): Promise<void> {
-        const response = await fetch(`${BASE_URL}/${lotId}?deletion_reason=${encodeURIComponent(deletionReason)}`, {
+        const response = await fetch(`${API_BASE_URL}/${lotId}?deletion_reason=${encodeURIComponent(deletionReason)}`, {
             method: "DELETE",
             headers: this.getAuthHeader(),
         });
@@ -166,7 +166,7 @@ class CoffeeLotService {
 
     // Cambiar estado del lote
     async changeStatus(lotId: number, newStatus: LotStatus, changeReason?: string): Promise<CoffeeLot> {
-        const response = await fetch(`${BASE_URL}/${lotId}/status`, {
+        const response = await fetch(`${API_BASE_URL}/${lotId}/status`, {
             method: "PATCH",
             headers: this.getAuthHeader(),
             body: JSON.stringify({
@@ -199,7 +199,7 @@ class CoffeeLotService {
         if (filters.start_date) params.append("start_date", filters.start_date);
         if (filters.end_date) params.append("end_date", filters.end_date);
 
-        const url = `${BASE_URL}/search/advanced${params.toString() ? `?${params.toString()}` : ""}`;
+        const url = `${API_BASE_URL}/search/advanced${params.toString() ? `?${params.toString()}` : ""}`;
 
         const response = await fetch(url, {
             method: "GET",

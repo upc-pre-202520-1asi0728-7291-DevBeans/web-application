@@ -1,9 +1,7 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,10 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Coffee, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { authService } from "@/lib/services/auth.service"
+import { useAuth } from "@/hooks/contexts/auth-context"
 
 export function LoginForm() {
-  const router = useRouter()
+  const { login } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -26,21 +24,8 @@ export function LoginForm() {
     setIsLoading(true)
 
     try {
-      const response = await authService.login({
-        email,
-        password
-      })
-
-      // Guardar token y usuario en localStorage
-      authService.saveToken(response.access_token)
-      authService.saveUser(response.user)
-
-      // Redirigir según tipo de usuario
-      if (response.user.user_type === "COOPERATIVE") {
-        router.push("/dashboard/cooperative")
-      } else {
-        router.push("/dashboard/producer")
-      }
+      // El login ahora maneja todo: autenticación + carga de perfil + redirección
+      await login(email, password)
     } catch (err: any) {
       setError(err.message || "Error al iniciar sesión. Verifica tus credenciales.")
     } finally {
@@ -77,6 +62,7 @@ export function LoginForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
@@ -88,16 +74,17 @@ export function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLoading}
               />
             </div>
-            <div className="flex items-center justify-between">
-              <Link href="/forgot-password" className="text-sm text-amber-700 hover:underline">
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </div>
+            <div className="flex items-center justify-between"></div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full bg-amber-700 hover:bg-amber-800" disabled={isLoading}>
+            <Button
+                type="submit"
+                className="w-full bg-amber-700 hover:bg-amber-800"
+                disabled={isLoading}
+            >
               {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
             <p className="text-sm text-center text-gray-600">

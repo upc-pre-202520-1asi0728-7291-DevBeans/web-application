@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,6 +29,7 @@ import {
 import { authService } from "@/lib/services/auth.service"
 
 export function BatchManagement() {
+  const router = useRouter()
   const [batches, setBatches] = useState<CoffeeLot[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -135,7 +137,7 @@ export function BatchManagement() {
       })
 
       setIsCreateOpen(false)
-      loadBatches() // Recargar lista
+      await loadBatches() // Recargar lista
     } catch (err: any) {
       setError(err.message || "Error al crear el lote")
     } finally {
@@ -153,7 +155,7 @@ export function BatchManagement() {
       await coffeeLotService.updateLot(selectedLot.id, editLotData)
       setIsEditOpen(false)
       setSelectedLot(null)
-      loadBatches() // Recargar lista
+      await loadBatches() // Recargar lista
     } catch (err: any) {
       setError(err.message || "Error al actualizar el lote")
     } finally {
@@ -177,7 +179,7 @@ export function BatchManagement() {
       setIsDeleteOpen(false)
       setSelectedLot(null)
       setDeletionReason("")
-      loadBatches() // Recargar lista
+      await loadBatches() // Recargar lista
     } catch (err: any) {
       setError(err.message || "Error al eliminar el lote")
     } finally {
@@ -198,6 +200,10 @@ export function BatchManagement() {
   const openDeleteDialog = (lot: CoffeeLot) => {
     setSelectedLot(lot)
     setIsDeleteOpen(true)
+  }
+
+  const handleViewClassifications = (lotId: number) => {
+    router.push(`/dashboard/producer/batches/${lotId}/classifications`)
   }
 
   const filteredBatches = batches.filter((batch) =>
@@ -496,8 +502,13 @@ export function BatchManagement() {
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
-                              <Button variant="ghost" size="sm" disabled title="Próximamente">
-                                <Eye className="h-4 w-4 text-gray-400" />
+                              <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleViewClassifications(batch.id)}
+                                  title="Ver clasificaciones"
+                              >
+                                <Eye className="h-4 w-4" />
                               </Button>
                               <Button
                                   variant="ghost"

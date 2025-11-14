@@ -15,7 +15,7 @@ const stats = [
     name: "Calidad Promedio",
     value: "85.5%",
     icon: TrendingUp,
-    change: "+2.3% vs mes anterior",
+    change: "+2.3% vs mes anterior", // Ejemplo estatico que no debería ser estatico
     changeType: "positive",
   },
   {
