@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, TrendingUp, Calendar, Beaker, Award } from "lucide-react"
+import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, Calendar, Beaker, Award } from "lucide-react"
 import { classificationService, type ClassificationSession } from "@/lib/services/classification.service"
 import { coffeeLotService, type CoffeeLot } from "@/lib/services/coffee-lot.service"
 
@@ -37,6 +37,17 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
     useEffect(() => {
         loadData()
     }, [lotId])
+
+    // 🔧 NUEVO: Reset completo cuando se cierra el diálogo
+    useEffect(() => {
+        if (!isUploadOpen) {
+            // Resetear TODOS los estados cuando se cierra el diálogo
+            setSelectedFile(null)
+            setIsProcessing(false)
+            setShowSuccess(false)
+            setError("")
+        }
+    }, [isUploadOpen])
 
     const loadData = async () => {
         setIsLoading(true)
@@ -96,13 +107,30 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             // Esperar 2 segundos y recargar
             setTimeout(() => {
                 setIsUploadOpen(false)
-                setShowSuccess(false)
-                setSelectedFile(null)
+                // Los estados se resetearán automáticamente por el useEffect
                 loadData()
             }, 2000)
         } catch (err: any) {
             setError(err.message || "Error al procesar la imagen")
+            // 🔧 CRÍTICO: Resetear isProcessing en caso de error
             setIsProcessing(false)
+        }
+    }
+
+    // 🔧 NUEVO: Función para abrir el diálogo limpio
+    const handleOpenUploadDialog = () => {
+        // Asegurar que todo esté limpio antes de abrir
+        setSelectedFile(null)
+        setIsProcessing(false)
+        setShowSuccess(false)
+        setError("")
+        setIsUploadOpen(true)
+    }
+
+    // 🔧 NUEVO: Función para cerrar el diálogo con reset
+    const handleCloseUploadDialog = () => {
+        if (!isProcessing) {
+            setIsUploadOpen(false)
         }
     }
 
@@ -123,40 +151,19 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         }
     }
 
-    const getQualityColor = (category: string) => {
-        switch (category) {
-            case "Specialty":
-                return "text-purple-600"
-            case "Premium":
-                return "text-blue-600"
-            case "A":
-                return "text-green-600"
-            case "B":
-                return "text-yellow-600"
-            case "C":
-                return "text-orange-600"
-            default:
-                return "text-gray-600"
-        }
-    }
 
-    // Función para obtener la calidad de una sesión con múltiples fallbacks
     const getSessionQuality = (session: ClassificationSession): number => {
         const result = session.classification_result
 
-        // 1. Si overall_batch_quality existe y no es null
         if (result?.overall_batch_quality !== undefined && result.overall_batch_quality !== null) {
             const value = result.overall_batch_quality
-            // Si está en escala 0-1, convertir a 0-100
             return value <= 1 ? value * 100 : value
         }
 
-        // 2. Si average_score existe (está en escala 0-1)
         if (result?.average_score !== undefined && result.average_score !== null) {
             return result.average_score * 100
         }
 
-        // 3. Calcular manualmente desde los análisis individuales si están disponibles
         if (session.analyses && session.analyses.length > 0) {
             const sum = session.analyses.reduce((acc: number, analysis: any) =>
                 acc + (analysis.final_score || 0), 0)
@@ -166,7 +173,6 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         return 0
     }
 
-    // Calcular estadísticas generales
     const totalGrains = sessions.reduce((acc, s) => acc + s.total_grains_analyzed, 0)
     const averageQuality = sessions.length > 0
         ? sessions.reduce((acc, s) => acc + getSessionQuality(s), 0) / sessions.length
@@ -285,9 +291,6 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                                     </div>
 
                                     <div className="flex items-center justify-between">
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-sm text-gray-600">
                                             <Award className="h-4 w-4" />
                                             <span>Puntuación</span>
@@ -338,7 +341,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                     <Button
                         className="bg-amber-700 hover:bg-amber-800"
                         size="lg"
-                        onClick={() => setIsUploadOpen(true)}
+                        onClick={handleOpenUploadDialog}
                     >
                         <Upload className="h-4 w-4 mr-2" />
                         Click Aquí
@@ -347,7 +350,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             </Card>
 
             {/* Upload Dialog */}
-            <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+            <Dialog open={isUploadOpen} onOpenChange={handleCloseUploadDialog}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                         <DialogTitle>Nueva Clasificación de Granos</DialogTitle>
@@ -415,7 +418,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                             <DialogFooter>
                                 <Button
                                     variant="outline"
-                                    onClick={() => setIsUploadOpen(false)}
+                                    onClick={handleCloseUploadDialog}
                                     disabled={isProcessing}
                                 >
                                     Cancelar
