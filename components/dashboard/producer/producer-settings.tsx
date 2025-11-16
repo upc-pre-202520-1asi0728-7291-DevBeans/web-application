@@ -312,6 +312,16 @@ export function ProducerSettings() {
             <CardDescription>Configura cómo quieres recibir notificaciones</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Info sobre email */}
+            <Alert className="bg-blue-50 border-blue-200">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-sm text-blue-900">
+                Los reportes por email se enviarán a: <strong>{user?.email}</strong>
+                <br />
+                <span className="text-xs">El administrador debe configurar el servidor SMTP en el backend para habilitar el envío automático.</span>
+              </AlertDescription>
+            </Alert>
+
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Notificaciones por Email</Label>
@@ -325,8 +335,8 @@ export function ProducerSettings() {
             <Separator />
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Notificaciones por WhatsApp</Label>
-                <p className="text-sm text-gray-500">Recibe alertas importantes por WhatsApp</p>
+                <Label>Compartir por WhatsApp</Label>
+                <p className="text-sm text-gray-500">Habilitar botón de compartir reportes en WhatsApp</p>
               </div>
               <Switch
                   checked={notifications.whatsapp}
