@@ -72,10 +72,25 @@ class ClassificationService {
     /**
      * Inicia una sesión de clasificación con una imagen
      */
-    async startClassificationSession(coffeeLotId: number, imageFile: File): Promise<ClassificationSession> {
+    async startClassificationSession(
+        coffeeLotId: number, 
+        imageFile: File,
+        options?: {
+            userEmail?: string;
+            sendEmailNotification?: boolean;
+        }
+    ): Promise<ClassificationSession> {
         const formData = new FormData();
         formData.append('coffee_lot_id', coffeeLotId.toString());
         formData.append('image', imageFile);
+        
+        if (options?.userEmail) {
+            formData.append('user_email', options.userEmail);
+        }
+        
+        if (options?.sendEmailNotification) {
+            formData.append('send_email_notification', 'true');
+        }
 
         const response = await fetch(`${API_BASE_URL}/api/v1/classification/session`, {
             method: 'POST',
@@ -84,6 +99,25 @@ class ClassificationService {
         });
 
         return this.handleResponse<ClassificationSession>(response);
+    }
+
+    /**
+     * Envía un reporte de clasificación por correo electrónico
+     */
+    async sendReportByEmail(sessionId: number, recipientEmail: string): Promise<{ success: boolean; message: string }> {
+        const response = await fetch(`${API_BASE_URL}/api/v1/classification/send-report`, {
+            method: 'POST',
+            headers: {
+                ...this.getAuthHeaders(),
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                recipient_email: recipientEmail,
+            }),
+        });
+
+        return this.handleResponse<{ success: boolean; message: string }>(response);
     }
 
     /**

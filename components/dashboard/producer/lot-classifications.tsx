@@ -15,9 +15,11 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, Calendar, Beaker, Award } from "lucide-react"
+import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, Calendar, Beaker, Award, Mail, MessageCircle, Send } from "lucide-react"
 import { classificationService, type ClassificationSession } from "@/lib/services/classification.service"
 import { coffeeLotService, type CoffeeLot } from "@/lib/services/coffee-lot.service"
+import { toast } from "sonner"
+import { Switch } from "@/components/ui/switch"
 
 interface LotClassificationsProps {
     lotId: number
@@ -33,6 +35,9 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [isProcessing, setIsProcessing] = useState(false)
     const [showSuccess, setShowSuccess] = useState(false)
+    const [completedSession, setCompletedSession] = useState<ClassificationSession | null>(null)
+    const [sendEmail, setSendEmail] = useState(false)
+    const [isSendingEmail, setIsSendingEmail] = useState(false)
 
     useEffect(() => {
         loadData()
@@ -45,9 +50,20 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             setSelectedFile(null)
             setIsProcessing(false)
             setShowSuccess(false)
+            setCompletedSession(null)
+            setSendEmail(false)
             setError("")
         }
     }, [isUploadOpen])
+
+    // Cargar preferencias de notificación desde localStorage
+    useEffect(() => {
+        const savedNotifications = localStorage.getItem('notifications')
+        if (savedNotifications) {
+            const prefs = JSON.parse(savedNotifications)
+            setSendEmail(prefs.email && prefs.classification)
+        }
+    }, [])
 
     const loadData = async () => {
         setIsLoading(true)
@@ -99,21 +115,54 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         setError("")
 
         try {
-            await classificationService.startClassificationSession(lotId, selectedFile)
+            // Obtener email del usuario desde localStorage si se debe enviar notificación
+            let userEmail: string | undefined
+            if (sendEmail) {
+                const userStr = localStorage.getItem('user')
+                if (userStr) {
+                    const user = JSON.parse(userStr)
+                    userEmail = user.email
+                }
+            }
 
-            // Mostrar éxito
+            const session = await classificationService.startClassificationSession(
+                lotId, 
+                selectedFile,
+                {
+                    userEmail,
+                    sendEmailNotification: sendEmail
+                }
+            )
+
+            // Guardar sesión completada para mostrar opciones
+            setCompletedSession(session)
+
+            // Mostrar éxito y alerta automática
             setShowSuccess(true)
+            
+            // Mostrar toast de éxito
+            toast.success('¡Clasificación completada!', {
+                description: `Se analizaron ${session.total_grains_analyzed} granos con éxito`,
+            })
 
-            // Esperar 2 segundos y recargar
+            // Si se envió email, mostrar notificación
+            if (sendEmail && userEmail) {
+                toast.success('📧 Reporte enviado por email', {
+                    description: `El reporte fue enviado a ${userEmail}`,
+                })
+            }
+
+            // Esperar 3 segundos antes de recargar
             setTimeout(() => {
                 setIsUploadOpen(false)
-                // Los estados se resetearán automáticamente por el useEffect
                 loadData()
-            }, 2000)
+            }, 3000)
         } catch (err: any) {
             setError(err.message || "Error al procesar la imagen")
-            // 🔧 CRÍTICO: Resetear isProcessing en caso de error
             setIsProcessing(false)
+            toast.error('Error al procesar la clasificación', {
+                description: err.message
+            })
         }
     }
 
@@ -123,6 +172,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         setSelectedFile(null)
         setIsProcessing(false)
         setShowSuccess(false)
+        setCompletedSession(null)
         setError("")
         setIsUploadOpen(true)
     }
@@ -131,6 +181,63 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
     const handleCloseUploadDialog = () => {
         if (!isProcessing) {
             setIsUploadOpen(false)
+        }
+    }
+
+    // Función para compartir reporte por WhatsApp
+    const handleShareWhatsApp = () => {
+        if (!completedSession || !lot) return
+
+        const quality = getSessionQuality(completedSession)
+        const message = `🌱 *Reporte de Clasificación de Café*\n\n` +
+            `📦 Lote: ${lot.lot_number}\n` +
+            `📊 Sesión: ${completedSession.session_id_vo}\n` +
+            `🔬 Granos Analizados: ${completedSession.total_grains_analyzed}\n` +
+            `⭐ Calidad Promedio: ${quality.toFixed(1)}%\n` +
+            `⏱️ Tiempo: ${completedSession.processing_time_seconds?.toFixed(1)}s\n\n` +
+            `Generado por BeanDetect AI`
+
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`
+        window.open(whatsappUrl, '_blank')
+        
+        toast.success('Compartiendo por WhatsApp', {
+            description: 'Se abrió WhatsApp con el mensaje pre-llenado'
+        })
+    }
+
+    // Función para reenviar email manualmente
+    const handleResendEmail = async () => {
+        if (!completedSession) return
+
+        setIsSendingEmail(true)
+        try {
+            const userStr = localStorage.getItem('user')
+            if (!userStr) {
+                toast.error('No se encontró información del usuario')
+                return
+            }
+
+            const user = JSON.parse(userStr)
+            const result = await classificationService.sendReportByEmail(
+                completedSession.id,
+                user.email
+            )
+
+            if (result.success) {
+                toast.success('Reporte enviado', {
+                    description: result.message
+                })
+            } else {
+                toast.warning('No se pudo enviar el reporte', {
+                    description: result.message
+                })
+            }
+        } catch (err: any) {
+            toast.error('Error al enviar reporte', {
+                description: err.message
+            })
+        } finally {
+            setIsSendingEmail(false)
         }
     }
 
@@ -367,12 +474,53 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                     )}
 
                     {showSuccess ? (
-                        <div className="py-8 text-center">
-                            <CheckCircle2 className="h-16 w-16 mx-auto text-green-600 mb-4" />
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                ¡Clasificación Completada!
-                            </h3>
-                            <p className="text-sm text-gray-600">
+                        <div className="py-6 space-y-6">
+                            <div className="text-center">
+                                <CheckCircle2 className="h-16 w-16 mx-auto text-green-600 mb-4" />
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    ¡Clasificación Completada!
+                                </h3>
+                                {completedSession && (
+                                    <div className="text-sm text-gray-600 space-y-1">
+                                        <p>Se analizaron <strong>{completedSession.total_grains_analyzed}</strong> granos</p>
+                                        <p>Calidad promedio: <strong className="text-amber-700">{getSessionQuality(completedSession).toFixed(1)}%</strong></p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Opciones de compartir */}
+                            {completedSession && (
+                                <div className="space-y-3">
+                                    <p className="text-sm font-medium text-gray-700 text-center">
+                                        Compartir resultados
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleShareWhatsApp}
+                                            className="w-full"
+                                        >
+                                            <MessageCircle className="h-4 w-4 mr-2" />
+                                            WhatsApp
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleResendEmail}
+                                            disabled={isSendingEmail}
+                                            className="w-full"
+                                        >
+                                            {isSendingEmail ? (
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                            ) : (
+                                                <Mail className="h-4 w-4 mr-2" />
+                                            )}
+                                            Email
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <p className="text-xs text-center text-gray-500">
                                 Redirigiendo a los resultados...
                             </p>
                         </div>
@@ -413,6 +561,23 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                                         />
                                     </div>
                                 )}
+
+                                {/* Opción de notificación por email */}
+                                <div className="flex items-center justify-between rounded-lg border p-4">
+                                    <div className="flex-1 space-y-0.5">
+                                        <Label htmlFor="email-notification" className="text-sm font-medium">
+                                            Enviar reporte por email
+                                        </Label>
+                                        <p className="text-xs text-gray-500">
+                                            Recibirás el reporte al completar la clasificación
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        id="email-notification"
+                                        checked={sendEmail}
+                                        onCheckedChange={setSendEmail}
+                                    />
+                                </div>
                             </div>
 
                             <DialogFooter>
