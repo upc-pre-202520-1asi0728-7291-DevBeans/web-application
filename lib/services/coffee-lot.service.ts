@@ -1,9 +1,9 @@
 // lib/services/coffee-lot.service.ts
 
-const API_BASE_URL = "https://bean-detect-ai-api-platform.azurewebsites.net/api/v1/coffee-lots";
-//const API_BASE_URL = "http://localhost:8000/api/v1/coffee-lots";
+import { BaseService, API_BASE_URL } from './base.service';
 
-// Enums
+const COFFEE_LOT_BASE_URL = `${API_BASE_URL}/api/v1/coffee-lots`;
+
 export enum CoffeeVariety {
     TYPICA = "TYPICA",
     CATURRA = "CATURRA",
@@ -30,7 +30,6 @@ export enum LotStatus {
     SHIPPED = "SHIPPED"
 }
 
-// Tipos
 export interface CoffeeLot {
     id: number;
     lot_number: string;
@@ -69,17 +68,10 @@ export interface UpdateCoffeeLotData {
     climate_zone?: string;
 }
 
-// Servicio
-class CoffeeLotService {
-    private getAuthHeader(): HeadersInit {
-        const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-        return {
-            "Content-Type": "application/json",
-            ...(token && { Authorization: `Bearer ${token}` })
-        };
-    }
-
-    // Obtener todos los lotes de un productor
+/**
+ * Coffee Lot Service for handling coffee lot-related API calls
+ */
+class CoffeeLotService extends BaseService {
     async getLotsByProducer(
         producerId: number,
         status?: LotStatus,
@@ -89,73 +81,49 @@ class CoffeeLotService {
         if (status) params.append("producer_status", status);
         if (harvestYear) params.append("harvest_year", harvestYear.toString());
 
-        const url = `${API_BASE_URL}/producer/${producerId}${params.toString() ? `?${params.toString()}` : ""}`;
+        const url = `${COFFEE_LOT_BASE_URL}/producer/${producerId}${params.toString() ? `?${params.toString()}` : ""}`;
 
         const response = await fetch(url, {
             method: "GET",
-            headers: this.getAuthHeader(),
+            headers: this.getAuthHeaders(),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Error al obtener los lotes");
-        }
-
-        return response.json();
+        return this.handleResponse<CoffeeLot[]>(response);
     }
 
-    // Obtener un lote específico
     async getLotById(lotId: number): Promise<CoffeeLot> {
-        const response = await fetch(`${API_BASE_URL}/${lotId}`, {
+        const response = await fetch(`${COFFEE_LOT_BASE_URL}/${lotId}`, {
             method: "GET",
-            headers: this.getAuthHeader(),
+            headers: this.getAuthHeaders(),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Error al obtener el lote");
-        }
-
-        return response.json();
+        return this.handleResponse<CoffeeLot>(response);
     }
 
-    // Registrar nuevo lote
     async registerLot(data: RegisterCoffeeLotData): Promise<CoffeeLot> {
-        const response = await fetch(API_BASE_URL, {
+        const response = await fetch(COFFEE_LOT_BASE_URL, {
             method: "POST",
-            headers: this.getAuthHeader(),
+            headers: this.getAuthHeaders(),
             body: JSON.stringify(data),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Error al registrar el lote");
-        }
-
-        return response.json();
+        return this.handleResponse<CoffeeLot>(response);
     }
 
-    // Actualizar lote
     async updateLot(lotId: number, data: UpdateCoffeeLotData): Promise<CoffeeLot> {
-        const response = await fetch(`${API_BASE_URL}/${lotId}`, {
+        const response = await fetch(`${COFFEE_LOT_BASE_URL}/${lotId}`, {
             method: "PUT",
-            headers: this.getAuthHeader(),
+            headers: this.getAuthHeaders(),
             body: JSON.stringify(data),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Error al actualizar el lote");
-        }
-
-        return response.json();
+        return this.handleResponse<CoffeeLot>(response);
     }
 
-    // Eliminar lote
     async deleteLot(lotId: number, deletionReason: string): Promise<void> {
-        const response = await fetch(`${API_BASE_URL}/${lotId}?deletion_reason=${encodeURIComponent(deletionReason)}`, {
+        const response = await fetch(`${COFFEE_LOT_BASE_URL}/${lotId}?deletion_reason=${encodeURIComponent(deletionReason)}`, {
             method: "DELETE",
-            headers: this.getAuthHeader(),
+            headers: this.getAuthHeaders(),
         });
 
         if (!response.ok) {
@@ -164,26 +132,19 @@ class CoffeeLotService {
         }
     }
 
-    // Cambiar estado del lote
     async changeStatus(lotId: number, newStatus: LotStatus, changeReason?: string): Promise<CoffeeLot> {
-        const response = await fetch(`${API_BASE_URL}/${lotId}/status`, {
+        const response = await fetch(`${COFFEE_LOT_BASE_URL}/${lotId}/status`, {
             method: "PATCH",
-            headers: this.getAuthHeader(),
+            headers: this.getAuthHeaders(),
             body: JSON.stringify({
                 new_status: newStatus,
                 change_reason: changeReason
             }),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Error al cambiar el estado");
-        }
-
-        return response.json();
+        return this.handleResponse<CoffeeLot>(response);
     }
 
-    // Búsqueda avanzada de lotes
     async searchLots(filters: {
         variety?: CoffeeVariety;
         processing_method?: ProcessingMethod;
@@ -199,19 +160,14 @@ class CoffeeLotService {
         if (filters.start_date) params.append("start_date", filters.start_date);
         if (filters.end_date) params.append("end_date", filters.end_date);
 
-        const url = `${API_BASE_URL}/search/advanced${params.toString() ? `?${params.toString()}` : ""}`;
+        const url = `${COFFEE_LOT_BASE_URL}/search/advanced${params.toString() ? `?${params.toString()}` : ""}`;
 
         const response = await fetch(url, {
             method: "GET",
-            headers: this.getAuthHeader(),
+            headers: this.getAuthHeaders(),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Error en la búsqueda");
-        }
-
-        return response.json();
+        return this.handleResponse<CoffeeLot[]>(response);
     }
 }
 

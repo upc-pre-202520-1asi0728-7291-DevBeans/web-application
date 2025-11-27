@@ -1,199 +1,182 @@
+// components/dashboard/producer/certificate-modal.tsx
+
 "use client"
 
-import { useState } from 'react'
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Download, FileSpreadsheet, FileText, Copy, Check } from "lucide-react"
+import { Download, Mail } from "lucide-react"
 import { ClassificationSession } from "@/lib/services/classification.service"
 import { certificateService } from "@/lib/services/certificate.service"
+import { useState } from "react"
 
 interface CertificateModalProps {
-    session: ClassificationSession | null
+    sessions: ClassificationSession[] // Ahora acepta múltiples sesiones
+    coffeeLotId: number
     open: boolean
     onOpenChange: (open: boolean) => void
 }
 
-export function CertificateModal({ session, open, onOpenChange }: CertificateModalProps) {
-    const [copied, setCopied] = useState(false)
+export function CertificateModal({ sessions, coffeeLotId, open, onOpenChange }: CertificateModalProps) {
+    const [qrImageUrl, setQrImageUrl] = useState<string>("")
 
-    if (!session) return null
-
-    const qrData = certificateService.generateQRData(session)
-    const qrImageUrl = certificateService.generateQRImageURL(session, 300)
+    // Generar datos consolidados cuando se abre el modal
+    const handleOpen = (isOpen: boolean) => {
+        if (isOpen && sessions && sessions.length > 0) {
+            const lotData = certificateService.consolidateLotData(sessions)
+            const url = certificateService.generateConsolidatedQRImageURL(lotData, 400)
+            setQrImageUrl(url)
+        }
+        onOpenChange(isOpen)
+    }
 
     const handleDownloadPDF = () => {
-        certificateService.generatePDF(session)
-    }
-
-    const handleDownloadCSV = () => {
-        certificateService.generateCSV(session)
-    }
-
-    const handleCopyQRData = () => {
-        navigator.clipboard.writeText(qrData)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-    }
-
-    const handleDownloadQR = async () => {
-        try {
-            const response = await fetch(qrImageUrl)
-            const blob = await response.blob()
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = `qr-${session.session_id_vo}.png`
-            link.click()
-            URL.revokeObjectURL(url)
-        } catch (error) {
-            console.error('Error downloading QR:', error)
+        if (sessions && sessions.length > 0) {
+            const lotData = certificateService.consolidateLotData(sessions)
+            certificateService.generateConsolidatedPDF(lotData)
         }
     }
 
+    const handleDownloadCSV = () => {
+        if (sessions && sessions.length > 0) {
+            const lotData = certificateService.consolidateLotData(sessions)
+            certificateService.generateConsolidatedCSV(lotData)
+        }
+    }
+
+    if (!sessions || sessions.length === 0) {
+        return null
+    }
+
+    // Calcular datos consolidados para mostrar
+    const lotData = certificateService.consolidateLotData(sessions)
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={handleOpen}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Certificado de Clasificación</DialogTitle>
-                    <DialogDescription>
-                        Sesión {session.session_id_vo} - Lote #{session.coffee_lot_id}
-                    </DialogDescription>
+                    <DialogTitle>Certificado del Lote #{coffeeLotId}</DialogTitle>
                 </DialogHeader>
 
-                <div className="grid md:grid-cols-2 gap-6">
-                    {/* QR Code Section */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h3 className="font-semibold text-gray-900">Código QR</h3>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleCopyQRData}
-                                className="text-xs"
-                            >
-                                {copied ? (
-                                    <>
-                                        <Check className="h-3 w-3 mr-1" />
-                                        Copiado
-                                    </>
-                                ) : (
-                                    <>
-                                        <Copy className="h-3 w-3 mr-1" />
-                                        Copiar datos
-                                    </>
-                                )}
-                            </Button>
+                <div className="space-y-6">
+                    {/* QR Code */}
+                    <div className="flex justify-center">
+                        <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
+                            {qrImageUrl ? (
+                                <img
+                                    src={qrImageUrl}
+                                    alt="QR Code del Lote"
+                                    className="w-64 h-64"
+                                />
+                            ) : (
+                                <div className="w-64 h-64 bg-gray-100 animate-pulse rounded" />
+                            )}
                         </div>
+                    </div>
 
-                        <div className="flex flex-col items-center bg-white p-6 border border-gray-200 rounded-lg">
-                            <img
-                                src={qrImageUrl}
-                                alt="QR Code"
-                                className="w-[200px] h-[200px]"
-                            />
-                            <p className="text-xs text-gray-500 mt-3 text-center">
-                                Escanea para ver el certificado
-                            </p>
+                    {/* Información Consolidada */}
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <p className="text-xs text-gray-500">Lote de Café</p>
+                                <p className="font-semibold text-gray-900">#{coffeeLotId}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Total de Granos</p>
+                                <p className="font-semibold text-gray-900">{lotData.totalGrainsAnalyzed}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Sesiones Realizadas</p>
+                                <p className="font-semibold text-gray-900">{lotData.totalSessions}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Calidad Promedio</p>
+                                <p className="font-semibold text-amber-700">{lotData.averageQuality.toFixed(1)}%</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Categoría Predominante</p>
+                                <p className="font-semibold text-gray-900">{lotData.predominantCategory}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Período de Análisis</p>
+                                <p className="font-semibold text-gray-900 text-xs">
+                                    {new Date(lotData.firstClassificationDate).toLocaleDateString('es-PE', {
+                                        day: '2-digit',
+                                        month: 'short'
+                                    })} - {new Date(lotData.lastClassificationDate).toLocaleDateString('es-PE', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                })}
+                                </p>
+                            </div>
                         </div>
+                    </div>
 
+                    {/* Distribución de Calidad */}
+                    <div className="space-y-2">
+                        <h4 className="text-sm font-semibold text-gray-900">Distribución de Calidad</h4>
+                        <div className="grid grid-cols-5 gap-2">
+                            <div className="text-center p-2 bg-emerald-50 rounded border border-emerald-200">
+                                <p className="text-xs text-gray-600">Specialty</p>
+                                <p className="font-bold text-emerald-700">{lotData.categoryDistribution.Specialty.count}</p>
+                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.Specialty.percentage.toFixed(1)}%</p>
+                            </div>
+                            <div className="text-center p-2 bg-green-50 rounded border border-green-200">
+                                <p className="text-xs text-gray-600">Premium</p>
+                                <p className="font-bold text-green-700">{lotData.categoryDistribution.Premium.count}</p>
+                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.Premium.percentage.toFixed(1)}%</p>
+                            </div>
+                            <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
+                                <p className="text-xs text-gray-600">A</p>
+                                <p className="font-bold text-blue-700">{lotData.categoryDistribution.A.count}</p>
+                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.A.percentage.toFixed(1)}%</p>
+                            </div>
+                            <div className="text-center p-2 bg-amber-50 rounded border border-amber-200">
+                                <p className="text-xs text-gray-600">B</p>
+                                <p className="font-bold text-amber-700">{lotData.categoryDistribution.B.count}</p>
+                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.B.percentage.toFixed(1)}%</p>
+                            </div>
+                            <div className="text-center p-2 bg-red-50 rounded border border-red-200">
+                                <p className="text-xs text-gray-600">C</p>
+                                <p className="font-bold text-red-700">{lotData.categoryDistribution.C.count}</p>
+                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.C.percentage.toFixed(1)}%</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Descripción */}
+                    <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
+                        <p className="font-medium text-blue-900 mb-1">💡 Sobre este certificado</p>
+                        <p className="text-xs">
+                            Este certificado consolida el análisis de <strong>{lotData.totalGrainsAnalyzed} granos</strong> del Lote #{coffeeLotId},
+                            procesados en <strong>{lotData.totalSessions} sesiones de clasificación</strong>.
+                            El código QR contiene información detallada del lote y puede ser escaneado para verificar la autenticidad.
+                        </p>
+                    </div>
+
+                    {/* Botones de Acción */}
+                    <div className="flex gap-3">
                         <Button
-                            onClick={handleDownloadQR}
-                            variant="outline"
-                            className="w-full"
-                            size="sm"
+                            onClick={handleDownloadPDF}
+                            className="flex-1 bg-amber-700 hover:bg-amber-800"
                         >
                             <Download className="h-4 w-4 mr-2" />
-                            Descargar QR
+                            Descargar PDF
+                        </Button>
+                        <Button
+                            onClick={handleDownloadCSV}
+                            variant="outline"
+                            className="flex-1"
+                        >
+                            <Download className="h-4 w-4 mr-2" />
+                            Descargar CSV
                         </Button>
                     </div>
 
-                    {/* Certificate Info */}
-                    <div className="space-y-4">
-                        <h3 className="font-semibold text-gray-900">Información del Certificado</h3>
-
-                        <div className="bg-gray-50 p-4 rounded-lg space-y-2 text-sm">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Total de granos:</span>
-                                <span className="font-medium">{session.total_grains_analyzed}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Calidad del lote:</span>
-                                <span className="font-medium">{session.classification_result?.lot_quality}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Puntuación promedio:</span>
-                                <span className="font-medium">
-                  {(session.classification_result?.average_quality_score * 100)?.toFixed(1)}%
-                </span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Fecha:</span>
-                                <span className="font-medium">
-                  {new Date(session.created_at).toLocaleDateString('es-PE')}
-                </span>
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <h4 className="text-sm font-medium text-gray-700">Distribución de Calidad</h4>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="bg-emerald-50 p-2 rounded">
-                                    <div className="text-gray-600">Especial</div>
-                                    <div className="font-semibold text-emerald-700">
-                                        {session.classification_result?.category_distribution?.Specialty?.count || 0}
-                                    </div>
-                                </div>
-                                <div className="bg-green-50 p-2 rounded">
-                                    <div className="text-gray-600">Premium</div>
-                                    <div className="font-semibold text-green-700">
-                                        {session.classification_result?.category_distribution?.Premium?.count || 0}
-                                    </div>
-                                </div>
-                                <div className="bg-blue-50 p-2 rounded">
-                                    <div className="text-gray-600">Calidad A</div>
-                                    <div className="font-semibold text-blue-700">
-                                        {session.classification_result?.category_distribution?.A?.count || 0}
-                                    </div>
-                                </div>
-                                <div className="bg-amber-50 p-2 rounded">
-                                    <div className="text-gray-600">Calidad B</div>
-                                    <div className="font-semibold text-amber-700">
-                                        {session.classification_result?.category_distribution?.B?.count || 0}
-                                    </div>
-                                </div>
-                                <div className="bg-red-50 p-2 rounded col-span-2">
-                                    <div className="text-gray-600">Calidad C</div>
-                                    <div className="font-semibold text-red-700">
-                                        {session.classification_result?.category_distribution?.C?.count || 0}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Download Buttons */}
-                <div className="grid md:grid-cols-2 gap-3 pt-4 border-t">
-                    <Button
-                        onClick={handleDownloadPDF}
-                        className="bg-amber-700 hover:bg-amber-800"
-                    >
-                        <FileText className="h-4 w-4 mr-2" />
-                        Descargar PDF
-                    </Button>
-                    <Button
-                        onClick={handleDownloadCSV}
-                        variant="outline"
-                    >
-                        <FileSpreadsheet className="h-4 w-4 mr-2" />
-                        Descargar CSV
-                    </Button>
+                    {/* Nota sobre el QR */}
+                    <p className="text-xs text-gray-500 text-center">
+                        Escanea el código QR para ver los detalles completos del lote
+                    </p>
                 </div>
             </DialogContent>
         </Dialog>

@@ -1,9 +1,10 @@
 // lib/services/auth.service.ts
+import { BaseService, API_BASE_URL } from './base.service';
 
-const BASE_URL = 'https://bean-detect-ai-api-platform.azurewebsites.net/api/v1/auth';
-//const BASE_URL = 'http://localhost:8000/api/v1/auth';
+// Authentication API base URL
+const AUTH_BASE_URL = `${API_BASE_URL}/api/v1/auth`;
 
-// Atributos para el registro de productor
+// Interface for producer registration data
 export interface RegisterProducerData {
     email: string;
     password: string;
@@ -24,7 +25,7 @@ export interface RegisterProducerData {
     production_capacity?: number;
 }
 
-// Atributos para el registro de cooperativa
+// Interface for cooperative registration data
 export interface RegisterCooperativeData {
     email: string;
     password: string;
@@ -40,12 +41,13 @@ export interface RegisterCooperativeData {
     certifications?: string[];
 }
 
-// Atributos para login
+// Interface for login data
 export interface LoginData {
     email: string;
     password: string;
 }
 
+// Interface for login response
 export interface LoginResponse {
     access_token: string;
     token_type: string;
@@ -57,6 +59,7 @@ export interface LoginResponse {
     };
 }
 
+// Interface for user resource
 export interface UserResource {
     id: number;
     email: string;
@@ -64,11 +67,12 @@ export interface UserResource {
     status: string;
 }
 
-// Servicio de autenticación
-class AuthService {
-    // Registrar productor
+/**
+ * * Auth Service for handling authentication-related API calls
+ */
+class AuthService extends BaseService {
     async registerProducer(data: RegisterProducerData): Promise<UserResource> {
-        const response = await fetch(`${BASE_URL}/register/producer`, {
+        const response = await fetch(`${AUTH_BASE_URL}/register/producer`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -76,17 +80,11 @@ class AuthService {
             body: JSON.stringify(data),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Error al registrar productor");
-        }
-
-        return response.json();
+        return this.handleResponse<UserResource>(response);
     }
 
-    // Registrar cooperativa
     async registerCooperative(data: RegisterCooperativeData): Promise<UserResource> {
-        const response = await fetch(`${BASE_URL}/register/cooperative`, {
+        const response = await fetch(`${AUTH_BASE_URL}/register/cooperative`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -94,17 +92,11 @@ class AuthService {
             body: JSON.stringify(data),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Error al registrar cooperativa");
-        }
-
-        return response.json();
+        return this.handleResponse<UserResource>(response);
     }
 
-    // Iniciar sesión
     async login(data: LoginData): Promise<LoginResponse> {
-        const response = await fetch(`${BASE_URL}/login`, {
+        const response = await fetch(`${AUTH_BASE_URL}/login`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -112,37 +104,21 @@ class AuthService {
             body: JSON.stringify(data),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Error al iniciar sesión");
-        }
-
-        return response.json();
+        return this.handleResponse<LoginResponse>(response);
     }
 
-    // Guardar token en localStorage
     saveToken(token: string): void {
         if (typeof window !== "undefined") {
             localStorage.setItem("access_token", token);
         }
     }
 
-    // Obtener token
-    getToken(): string | null {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("access_token");
-        }
-        return null;
-    }
-
-    // Guardar información del usuario
     saveUser(user: UserResource): void {
         if (typeof window !== "undefined") {
             localStorage.setItem("user", JSON.stringify(user));
         }
     }
 
-    // Obtener información del usuario
     getUser(): UserResource | null {
         if (typeof window !== "undefined") {
             const user = localStorage.getItem("user");
@@ -151,7 +127,6 @@ class AuthService {
         return null;
     }
 
-    // Cerrar sesión
     logout(): void {
         if (typeof window !== "undefined") {
             localStorage.removeItem("access_token");
@@ -159,7 +134,7 @@ class AuthService {
         }
     }
 
-    // Verificar si está autenticado
+    // Verifies if user is authenticated
     isAuthenticated(): boolean {
         return this.getToken() !== null;
     }

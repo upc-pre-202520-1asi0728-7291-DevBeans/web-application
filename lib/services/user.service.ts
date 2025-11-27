@@ -1,11 +1,7 @@
 // lib/services/user.service.ts
 
-const API_BASE_URL = "https://bean-detect-ai-api-platform.azurewebsites.net";
-//const API_BASE_URL = 'http://localhost:8000';
+import { BaseService, API_BASE_URL } from './base.service';
 
-// ============================================
-// INTERFACES - Perfiles
-// ============================================
 
 export interface ProducerProfile {
     id: number;
@@ -42,9 +38,6 @@ export interface CooperativeProfile {
     certifications: string[] | null;
 }
 
-// ============================================
-// INTERFACES - Actualización
-// ============================================
 
 export interface UpdateProfileData {
     first_name?: string;
@@ -69,48 +62,11 @@ export interface UserResource {
     created_at: string;
 }
 
-// ============================================
-// SERVICIO DE USUARIO
-// ============================================
 
-class UserService {
-    // ========================================
-    // Métodos auxiliares
-    // ========================================
-
-    private getAuthHeaders(): HeadersInit {
-        const token = this.getToken();
-        return {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        };
-    }
-
-    private getToken(): string | null {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("access_token");
-        }
-        return null;
-    }
-
-    private async handleResponse<T>(response: Response): Promise<T> {
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({
-                detail: 'An error occurred'
-            }));
-            throw new Error(error.detail || `HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    }
-
-    // ========================================
-    // Gestión de Perfiles
-    // ========================================
-
-    /**
-     * Obtiene el perfil completo de un usuario (productor o cooperativa)
-     * El backend determina automáticamente el tipo de perfil
-     */
+/**
+ * User Service for handling user profiles and related operations
+ */
+class UserService extends BaseService {
     async getProfile(userId: number): Promise<ProducerProfile | CooperativeProfile> {
         const response = await fetch(`${API_BASE_URL}/api/v1/profiles/${userId}`, {
             headers: this.getAuthHeaders(),
@@ -118,9 +74,6 @@ class UserService {
         return this.handleResponse<ProducerProfile | CooperativeProfile>(response);
     }
 
-    /**
-     * Obtiene específicamente el perfil de un productor
-     */
     async getProducerProfile(userId: number): Promise<ProducerProfile> {
         const response = await fetch(`${API_BASE_URL}/api/v1/profiles/producer/${userId}`, {
             headers: this.getAuthHeaders(),
@@ -128,9 +81,6 @@ class UserService {
         return this.handleResponse<ProducerProfile>(response);
     }
 
-    /**
-     * Obtiene específicamente el perfil de una cooperativa
-     */
     async getCooperativeProfile(userId: number): Promise<CooperativeProfile> {
         const response = await fetch(`${API_BASE_URL}/api/v1/profiles/cooperative/${userId}`, {
             headers: this.getAuthHeaders(),
@@ -138,13 +88,9 @@ class UserService {
         return this.handleResponse<CooperativeProfile>(response);
     }
 
-    // ========================================
-    // Actualización de Usuario
-    // ========================================
 
     /**
-     * Actualiza el perfil de un usuario
-     * Solo se actualizan los campos que se envían
+     * Updates user profile information
      */
     async updateProfile(userId: number, data: UpdateProfileData): Promise<UserResource> {
         const response = await fetch(`${API_BASE_URL}/api/v1/users/${userId}/profile`, {
@@ -156,8 +102,7 @@ class UserService {
     }
 
     /**
-     * Cambia la contraseña del usuario
-     * Requiere la contraseña actual para validación
+     * Changes user password
      */
     async changePassword(userId: number, data: ChangePasswordData): Promise<UserResource> {
         const response = await fetch(`${API_BASE_URL}/api/v1/users/${userId}/password`, {

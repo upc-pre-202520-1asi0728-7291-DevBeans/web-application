@@ -15,11 +15,10 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, Calendar, Beaker, Award, Mail, MessageCircle, Send } from "lucide-react"
+import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, Calendar, Beaker, Award, Mail, MessageCircle } from "lucide-react"
 import { classificationService, type ClassificationSession } from "@/lib/services/classification.service"
 import { coffeeLotService, type CoffeeLot } from "@/lib/services/coffee-lot.service"
 import { toast } from "sonner"
-import { Switch } from "@/components/ui/switch"
 
 interface LotClassificationsProps {
     lotId: number
@@ -36,34 +35,43 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [showSuccess, setShowSuccess] = useState(false)
     const [completedSession, setCompletedSession] = useState<ClassificationSession | null>(null)
-    const [sendEmail, setSendEmail] = useState(false)
     const [isSendingEmail, setIsSendingEmail] = useState(false)
+    const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(false)
 
     useEffect(() => {
         loadData()
     }, [lotId])
 
-    // 🔧 NUEVO: Reset completo cuando se cierra el diálogo
+    // Verificar estado de notificaciones por email
+    useEffect(() => {
+        const checkEmailNotifications = () => {
+            const savedNotifications = localStorage.getItem('notifications')
+            if (savedNotifications) {
+                const prefs = JSON.parse(savedNotifications)
+                setEmailNotificationsEnabled(prefs.email && prefs.classification)
+            } else {
+                setEmailNotificationsEnabled(false)
+            }
+        }
+
+        checkEmailNotifications()
+
+        // Actualizar cuando se abre el diálogo
+        if (isUploadOpen) {
+            checkEmailNotifications()
+        }
+    }, [isUploadOpen])
+
+    // Reset completo cuando se cierra el diálogo
     useEffect(() => {
         if (!isUploadOpen) {
-            // Resetear TODOS los estados cuando se cierra el diálogo
             setSelectedFile(null)
             setIsProcessing(false)
             setShowSuccess(false)
             setCompletedSession(null)
-            setSendEmail(false)
             setError("")
         }
     }, [isUploadOpen])
-
-    // Cargar preferencias de notificación desde localStorage
-    useEffect(() => {
-        const savedNotifications = localStorage.getItem('notifications')
-        if (savedNotifications) {
-            const prefs = JSON.parse(savedNotifications)
-            setSendEmail(prefs.email && prefs.classification)
-        }
-    }, [])
 
     const loadData = async () => {
         setIsLoading(true)
@@ -115,8 +123,18 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         setError("")
 
         try {
-            // Obtener email del usuario desde localStorage si se debe enviar notificación
+            // Leer preferencias de notificación desde localStorage
+            const savedNotifications = localStorage.getItem('notifications')
+            let sendEmail = false
             let userEmail: string | undefined
+
+            if (savedNotifications) {
+                const prefs = JSON.parse(savedNotifications)
+                // Enviar email solo si ambas opciones están habilitadas
+                sendEmail = prefs.email && prefs.classification
+            }
+
+            // Obtener email del usuario si se debe enviar notificación
             if (sendEmail) {
                 const userStr = localStorage.getItem('user')
                 if (userStr) {
@@ -126,7 +144,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             }
 
             const session = await classificationService.startClassificationSession(
-                lotId, 
+                lotId,
                 selectedFile,
                 {
                     userEmail,
@@ -137,12 +155,12 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             // Guardar sesión completada para mostrar opciones
             setCompletedSession(session)
 
-            // Mostrar éxito y alerta automática
+            // Mostrar éxito
             setShowSuccess(true)
-            
+
             // Mostrar toast de éxito
             toast.success('¡Clasificación completada!', {
-                description: `Se analizaron ${session.total_grains_analyzed} granos con éxito`,
+                description: `Se analizó el grano con éxito`,
             })
 
             // Si se envió email, mostrar notificación
@@ -166,9 +184,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         }
     }
 
-    // 🔧 NUEVO: Función para abrir el diálogo limpio
     const handleOpenUploadDialog = () => {
-        // Asegurar que todo esté limpio antes de abrir
         setSelectedFile(null)
         setIsProcessing(false)
         setShowSuccess(false)
@@ -177,7 +193,6 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         setIsUploadOpen(true)
     }
 
-    // 🔧 NUEVO: Función para cerrar el diálogo con reset
     const handleCloseUploadDialog = () => {
         if (!isProcessing) {
             setIsUploadOpen(false)
@@ -189,17 +204,20 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         if (!completedSession || !lot) return
 
         const quality = getSessionQuality(completedSession)
+        const grainAnalysis = completedSession.analyses?.[0]
+
         const message = `🌱 *Reporte de Clasificación de Café*\n\n` +
             `📦 Lote: ${lot.lot_number}\n` +
             `📊 Sesión: ${completedSession.session_id_vo}\n` +
-            `🔬 Granos Analizados: ${completedSession.total_grains_analyzed}\n` +
-            `⭐ Calidad Promedio: ${quality.toFixed(1)}%\n` +
+            `🔬 Grano ID: ${grainAnalysis?.id || 'N/A'}\n` +
+            `⭐ Puntaje: ${quality.toFixed(1)}%\n` +
+            `🏆 Categoría: ${grainAnalysis?.final_category || 'N/A'}\n` +
             `⏱️ Tiempo: ${completedSession.processing_time_seconds?.toFixed(1)}s\n\n` +
             `Generado por BeanDetect AI`
 
         const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`
         window.open(whatsappUrl, '_blank')
-        
+
         toast.success('Compartiendo por WhatsApp', {
             description: 'Se abrió WhatsApp con el mensaje pre-llenado'
         })
@@ -258,23 +276,25 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         }
     }
 
-
     const getSessionQuality = (session: ClassificationSession): number => {
-        const result = session.classification_result
+        // Prioridad 1: Obtener el score del primer análisis (grano individual)
+        if (session.analyses && session.analyses.length > 0) {
+            const firstAnalysis = session.analyses[0]
+            if (firstAnalysis.final_score !== undefined && firstAnalysis.final_score !== null) {
+                return firstAnalysis.final_score * 100
+            }
+        }
 
+        // Prioridad 2: overall_batch_quality
+        const result = session.classification_result
         if (result?.overall_batch_quality !== undefined && result.overall_batch_quality !== null) {
             const value = result.overall_batch_quality
             return value <= 1 ? value * 100 : value
         }
 
+        // Prioridad 3: average_score
         if (result?.average_score !== undefined && result.average_score !== null) {
             return result.average_score * 100
-        }
-
-        if (session.analyses && session.analyses.length > 0) {
-            const sum = session.analyses.reduce((acc: number, analysis: any) =>
-                acc + (analysis.final_score || 0), 0)
-            return (sum / session.analyses.length) * 100
         }
 
         return 0
@@ -363,6 +383,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {sessions.map((session) => {
                     const quality = getSessionQuality(session)
+                    const grainAnalysis = session.analyses?.[0]
 
                     return (
                         <Card
@@ -392,15 +413,15 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-sm text-gray-600">
                                             <Beaker className="h-4 w-4" />
-                                            <span>Granos</span>
+                                            <span>Grano ID</span>
                                         </div>
-                                        <span className="font-semibold">{session.total_grains_analyzed}</span>
+                                        <span className="font-semibold">#{grainAnalysis?.id || 'N/A'}</span>
                                     </div>
 
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-sm text-gray-600">
                                             <Award className="h-4 w-4" />
-                                            <span>Puntuación</span>
+                                            <span>Puntaje</span>
                                         </div>
                                         <span className="font-semibold text-amber-700">
                                             {quality.toFixed(1)}%
@@ -410,10 +431,10 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-sm text-gray-600">
                                             <Calendar className="h-4 w-4" />
-                                            <span>Tiempo</span>
+                                            <span>Categoría</span>
                                         </div>
                                         <span className="font-semibold">
-                                            {session.processing_time_seconds?.toFixed(1) || 'N/A'}s
+                                            {grainAnalysis?.final_category || 'N/A'}
                                         </span>
                                     </div>
                                 </div>
@@ -430,7 +451,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                         <Beaker className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                         <p className="text-gray-600 mb-2">No hay clasificaciones realizadas para este lote</p>
                         <p className="text-sm text-gray-500">
-                            Comienza subiendo una imagen de granos de café
+                            Comienza subiendo una imagen de un grano de café
                         </p>
                     </CardContent>
                 </Card>
@@ -460,9 +481,9 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             <Dialog open={isUploadOpen} onOpenChange={handleCloseUploadDialog}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
-                        <DialogTitle>Nueva Clasificación de Granos</DialogTitle>
+                        <DialogTitle>Nueva Clasificación de Grano</DialogTitle>
                         <DialogDescription>
-                            Sube una imagen de granos de café para análisis de calidad
+                            Sube una imagen de un grano de café para análisis de calidad
                         </DialogDescription>
                     </DialogHeader>
 
@@ -480,10 +501,11 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                                     ¡Clasificación Completada!
                                 </h3>
-                                {completedSession && (
+                                {completedSession && completedSession.analyses?.[0] && (
                                     <div className="text-sm text-gray-600 space-y-1">
-                                        <p>Se analizaron <strong>{completedSession.total_grains_analyzed}</strong> granos</p>
-                                        <p>Calidad promedio: <strong className="text-amber-700">{getSessionQuality(completedSession).toFixed(1)}%</strong></p>
+                                        <p>Grano ID: <strong>#{completedSession.analyses[0].id}</strong></p>
+                                        <p>Puntaje: <strong className="text-amber-700">{getSessionQuality(completedSession).toFixed(1)}%</strong></p>
+                                        <p>Categoría: <strong>{completedSession.analyses[0].final_category}</strong></p>
                                     </div>
                                 )}
                             </div>
@@ -538,7 +560,7 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                         <>
                             <div className="grid gap-4 py-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="image">Imagen de Granos *</Label>
+                                    <Label htmlFor="image">Imagen del Grano *</Label>
                                     <Input
                                         id="image"
                                         type="file"
@@ -562,22 +584,22 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                                     </div>
                                 )}
 
-                                {/* Opción de notificación por email */}
-                                <div className="flex items-center justify-between rounded-lg border p-4">
-                                    <div className="flex-1 space-y-0.5">
-                                        <Label htmlFor="email-notification" className="text-sm font-medium">
-                                            Enviar reporte por email
-                                        </Label>
-                                        <p className="text-xs text-gray-500">
-                                            Recibirás el reporte al completar la clasificación
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="email-notification"
-                                        checked={sendEmail}
-                                        onCheckedChange={setSendEmail}
-                                    />
-                                </div>
+                                {/* Estado de notificaciones por email */}
+                                {emailNotificationsEnabled ? (
+                                    <Alert className="bg-green-50 border-green-200">
+                                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                        <AlertDescription className="text-sm text-green-900">
+                                            Las notificaciones por correo están <strong>activadas</strong> en la configuración
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : (
+                                    <Alert className="bg-amber-50 border-amber-200">
+                                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                                        <AlertDescription className="text-sm text-amber-900">
+                                            Las notificaciones por correo están <strong>desactivadas</strong> en la configuración
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
                             </div>
 
                             <DialogFooter>

@@ -1,12 +1,8 @@
 // lib/services/classification.service.ts
 
-const API_BASE_URL = 'https://bean-detect-ai-api-platform.azurewebsites.net';
-//const API_BASE_URL = 'http://localhost:8000';
+import { BaseService, API_BASE_URL } from './base.service';
 
-// ============================================
-// INTERFACES - Clasificación
-// ============================================
-
+// Interface for individual grain analysis data
 export interface GrainAnalysis {
     id: number;
     session_id: number;
@@ -19,6 +15,7 @@ export interface GrainAnalysis {
     created_at: string;
 }
 
+// Interface for classification session data
 export interface ClassificationSession {
     id: number;
     session_id_vo: string;
@@ -33,6 +30,7 @@ export interface ClassificationSession {
     analyses: GrainAnalysis[];
 }
 
+// Interface for average quality metrics
 export interface AverageQuality {
     coffee_lot_id: number;
     average_quality_percentage: number;
@@ -40,40 +38,15 @@ export interface AverageQuality {
     quality_scale: string;
 }
 
-// ============================================
-// SERVICIO DE CLASIFICACIÓN
-// ============================================
-
-class ClassificationService {
-    private getAuthHeaders(): HeadersInit {
-        const token = this.getToken();
-        return {
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        };
-    }
-
-    private getToken(): string | null {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("access_token");
-        }
-        return null;
-    }
-
-    private async handleResponse<T>(response: Response): Promise<T> {
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({
-                detail: 'An error occurred'
-            }));
-            throw new Error(error.detail || `HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    }
-
+/**
+ * Classification Service for handling classification-related API calls
+ */
+class ClassificationService extends BaseService {
     /**
-     * Inicia una sesión de clasificación con una imagen
+     * Start a new classification session
      */
     async startClassificationSession(
-        coffeeLotId: number, 
+        coffeeLotId: number,
         imageFile: File,
         options?: {
             userEmail?: string;
@@ -83,18 +56,18 @@ class ClassificationService {
         const formData = new FormData();
         formData.append('coffee_lot_id', coffeeLotId.toString());
         formData.append('image', imageFile);
-        
+
         if (options?.userEmail) {
             formData.append('user_email', options.userEmail);
         }
-        
+
         if (options?.sendEmailNotification) {
             formData.append('send_email_notification', 'true');
         }
 
         const response = await fetch(`${API_BASE_URL}/api/v1/classification/session`, {
             method: 'POST',
-            headers: this.getAuthHeaders(),
+            headers: this.getAuthHeadersNoContentType(),
             body: formData,
         });
 
@@ -102,15 +75,12 @@ class ClassificationService {
     }
 
     /**
-     * Envía un reporte de clasificación por correo electrónico
+     * Send a classification report via email
      */
     async sendReportByEmail(sessionId: number, recipientEmail: string): Promise<{ success: boolean; message: string }> {
         const response = await fetch(`${API_BASE_URL}/api/v1/classification/send-report`, {
             method: 'POST',
-            headers: {
-                ...this.getAuthHeaders(),
-                'Content-Type': 'application/json',
-            },
+            headers: this.getAuthHeaders(),
             body: JSON.stringify({
                 session_id: sessionId,
                 recipient_email: recipientEmail,
@@ -121,7 +91,7 @@ class ClassificationService {
     }
 
     /**
-     * Obtiene todas las sesiones de clasificación de un lote
+     * Fetch classification sessions by coffee lot ID
      */
     async getSessionsByCoffeeLot(coffeeLotId: number): Promise<ClassificationSession[]> {
         const response = await fetch(
@@ -135,7 +105,7 @@ class ClassificationService {
     }
 
     /**
-     * Obtiene una sesión específica con todos sus análisis
+     * Fetch a classification session by its ID
      */
     async getSessionById(sessionId: number): Promise<ClassificationSession> {
         const response = await fetch(
@@ -149,7 +119,7 @@ class ClassificationService {
     }
 
     /**
-     * Obtiene la calidad promedio de un lote
+     * Fetch average quality metrics for a coffee lot
      */
     async getAverageQualityByLot(coffeeLotId: number): Promise<AverageQuality> {
         const response = await fetch(
@@ -163,7 +133,7 @@ class ClassificationService {
     }
 
     /**
-     * Obtiene todas las sesiones de clasificación
+     * Fetch all classification sessions
      */
     async getAllSessions(): Promise<ClassificationSession[]> {
         const response = await fetch(

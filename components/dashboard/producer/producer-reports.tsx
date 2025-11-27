@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download, QrCode, TrendingUp, AlertCircle, Loader2 } from "lucide-react"
+import { Download, QrCode, TrendingUp, AlertCircle, Loader2, Package } from "lucide-react"
 import { useClassificationReports } from "@/hooks/use-classification-reports"
 import { CertificateModal } from "@/components/dashboard/producer/certificate-modal"
 import { ClassificationSession } from "@/lib/services/classification.service"
@@ -13,18 +13,86 @@ interface ProducerReportsProps {
   coffeeLotId?: number
 }
 
+// Interfaz para lote consolidado
+interface ConsolidatedLot {
+  coffeeLotId: number
+  sessions: ClassificationSession[]
+  totalGrains: number
+  averageQuality: number
+  predominantCategory: string
+  firstClassification: string
+  lastClassification: string
+}
+
 export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
   const { data, loading, error } = useClassificationReports(coffeeLotId)
-  const [selectedSession, setSelectedSession] = useState<ClassificationSession | null>(null)
+  const [selectedLot, setSelectedLot] = useState<ConsolidatedLot | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
 
-  const handleViewQR = (session: ClassificationSession) => {
-    setSelectedSession(session)
+  // Agrupar sesiones por lote
+  const consolidatedLots = useMemo(() => {
+    if (!data) return []
+
+    const lotMap = new Map<number, ClassificationSession[]>()
+
+    // Agrupar sesiones por coffee_lot_id
+    data.sessions.forEach(session => {
+      if (session.status === 'COMPLETED') {
+        const existing = lotMap.get(session.coffee_lot_id) || []
+        lotMap.set(session.coffee_lot_id, [...existing, session])
+      }
+    })
+
+    // Convertir a array de lotes consolidados
+    const consolidated: ConsolidatedLot[] = []
+
+    lotMap.forEach((sessions, lotId) => {
+      const allAnalyses = sessions.flatMap(s => s.analyses || [])
+      const totalScore = allAnalyses.reduce((sum, a) => sum + a.final_score, 0)
+      const averageQuality = allAnalyses.length > 0 ? (totalScore / allAnalyses.length) * 100 : 0
+
+      // Calcular categoría predominante
+      const categoryCount: Record<string, number> = {}
+      allAnalyses.forEach(a => {
+        categoryCount[a.final_category] = (categoryCount[a.final_category] || 0) + 1
+      })
+      const predominantCategory = Object.entries(categoryCount).reduce((a, b) =>
+          a[1] > b[1] ? a : b
+      )[0] || 'N/A'
+
+      // Fechas
+      const dates = sessions.map(s => new Date(s.created_at).getTime())
+
+      consolidated.push({
+        coffeeLotId: lotId,
+        sessions,
+        totalGrains: allAnalyses.length,
+        averageQuality,
+        predominantCategory,
+        firstClassification: new Date(Math.min(...dates)).toISOString(),
+        lastClassification: new Date(Math.max(...dates)).toISOString()
+      })
+    })
+
+    // Ordenar por fecha más reciente
+    return consolidated.sort((a, b) =>
+        new Date(b.lastClassification).getTime() - new Date(a.lastClassification).getTime()
+    )
+  }, [data])
+
+  const handleViewQR = (lot: ConsolidatedLot) => {
+    setSelectedLot(lot)
     setModalOpen(true)
   }
 
-  const handleQuickDownload = (session: ClassificationSession) => {
-    certificateService.generatePDF(session)
+  const handleQuickDownload = (lot: ConsolidatedLot) => {
+    const lotData = certificateService.consolidateLotData(lot.sessions)
+    certificateService.generateConsolidatedPDF(lotData)
+  }
+
+  const handleDownloadCSV = (lot: ConsolidatedLot) => {
+    const lotData = certificateService.consolidateLotData(lot.sessions)
+    certificateService.generateConsolidatedCSV(lotData)
   }
 
   if (loading) {
@@ -52,9 +120,8 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
                 <div className="bg-gray-50 rounded-lg p-4 text-sm">
                   <p className="font-medium text-gray-900 mb-2">Verifica:</p>
                   <ul className="space-y-1 text-gray-600">
-                    <li>• Backend corriendo en: <code className="bg-white px-1 rounded">http://localhost:8000</code></li>
-                    {coffeeLotId && <li>• Lote #{coffeeLotId} existe en la base de datos</li>}
-                    <li>• CORS configurado correctamente</li>
+                    <li>• Haber registrado un nuevo lote</li>
+                    <li>• Haber realizado una clasificación previamente</li>
                   </ul>
                 </div>
 
@@ -91,27 +158,6 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
     C: 0
   }
 
-  // ✅ Helper para obtener la calidad del lote
-  const getLotQuality = (session: ClassificationSession): string => {
-    // Prioridad 1: predominant_category
-    if (session.classification_result?.predominant_category) {
-      return session.classification_result.predominant_category
-    }
-
-    // Prioridad 2: lot_quality (legacy)
-    if (session.classification_result?.lot_quality) {
-      return session.classification_result.lot_quality
-    }
-
-    // Fallback: Calcular desde overall_batch_quality
-    const quality = session.classification_result?.overall_batch_quality || 0
-    if (quality >= 90) return 'Specialty'
-    if (quality >= 80) return 'Premium'
-    if (quality >= 70) return 'A'
-    if (quality >= 60) return 'B'
-    return 'C'
-  }
-
   return (
       <div className="space-y-6">
         {/* Header */}
@@ -119,8 +165,8 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
           <h2 className="text-2xl font-bold text-gray-900">Reportes y Certificados</h2>
           <p className="text-sm text-gray-500 mt-1">
             {coffeeLotId
-                ? `Visualiza y descarga tus reportes de clasificación - Lote #${coffeeLotId}`
-                : `Visualiza y descarga todos tus reportes de clasificación`
+                ? `Certificados consolidados del Lote #${coffeeLotId}`
+                : `Certificados consolidados por lote de café`
             }
           </p>
         </div>
@@ -149,12 +195,12 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-gray-900">
-                {coffeeLotId ? data.sessionsCount : data.totalCoffeeLots}
+                {coffeeLotId ? data.sessionsCount : consolidatedLots.length}
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 {coffeeLotId
                     ? `${data.sessionsCount} sesiones de clasificación`
-                    : `${data.totalCoffeeLots} lotes de café analizados`
+                    : `${consolidatedLots.length} lotes con certificados`
                 }
               </p>
             </CardContent>
@@ -352,38 +398,38 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
           </CardContent>
         </Card>
 
-        {/* Export Certificates */}
+        {/* Certificados Consolidados por Lote */}
         <Card>
           <CardHeader>
-            <CardTitle>Certificados de Exportación</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-amber-700" />
+              Certificados Consolidados por Lote
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {data.sessions.filter(s => s.status === 'COMPLETED').map((session) => (
+              {consolidatedLots.map((lot) => (
                   <div
-                      key={session.id}
+                      key={lot.coffeeLotId}
                       className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-amber-300 transition-colors"
                   >
-                    <div>
-                      <p className="font-medium text-gray-900">{session.session_id_vo}</p>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">Lote #{lot.coffeeLotId}</p>
                       <p className="text-sm text-gray-500">
-                        Lote #{session.coffee_lot_id} • {session.total_grains_analyzed} granos • {getLotQuality(session)}
+                        {lot.totalGrains} granos • {lot.sessions.length} sesiones • {lot.predominantCategory}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        {new Date(session.created_at).toLocaleDateString('es-PE', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                        Calidad promedio: {lot.averageQuality.toFixed(1)}%
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(lot.firstClassification).toLocaleDateString('es-PE')} - {new Date(lot.lastClassification).toLocaleDateString('es-PE')}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleViewQR(session)}
+                          onClick={() => handleViewQR(lot)}
                       >
                         <QrCode className="h-4 w-4 mr-2" />
                         Ver QR
@@ -391,16 +437,23 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
                       <Button
                           size="sm"
                           className="bg-amber-700 hover:bg-amber-800"
-                          onClick={() => handleQuickDownload(session)}
+                          onClick={() => handleQuickDownload(lot)}
                       >
                         <Download className="h-4 w-4 mr-2" />
-                        Descargar
+                        PDF
+                      </Button>
+                      <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadCSV(lot)}
+                      >
+                        CSV
                       </Button>
                     </div>
                   </div>
               ))}
 
-              {data.sessions.length === 0 && (
+              {consolidatedLots.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     No hay certificados disponibles
                   </div>
@@ -409,12 +462,15 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
           </CardContent>
         </Card>
 
-        {/* Certificate Modal */}
-        <CertificateModal
-            session={selectedSession}
-            open={modalOpen}
-            onOpenChange={setModalOpen}
-        />
+        {/* Certificate Modal - Consolidado por lote */}
+        {selectedLot && (
+            <CertificateModal
+                sessions={selectedLot.sessions}
+                coffeeLotId={selectedLot.coffeeLotId}
+                open={modalOpen}
+                onOpenChange={setModalOpen}
+            />
+        )}
 
         {/* Recommendations */}
         <Card>
