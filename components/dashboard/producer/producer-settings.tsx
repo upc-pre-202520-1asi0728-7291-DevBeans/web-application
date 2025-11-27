@@ -36,7 +36,6 @@ export function ProducerSettings() {
   // Estados de notificaciones y configuración (localStorage)
   const [notifications, setNotifications] = useState({
     email: true,
-    whatsapp: true,
     classification: true,
   })
 
@@ -332,18 +331,7 @@ export function ProducerSettings() {
                   onCheckedChange={() => handleNotificationChange('email')}
               />
             </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Compartir por WhatsApp</Label>
-                <p className="text-sm text-gray-500">Habilitar botón de compartir reportes en WhatsApp</p>
-              </div>
-              <Switch
-                  checked={notifications.whatsapp}
-                  onCheckedChange={() => handleNotificationChange('whatsapp')}
-              />
-            </div>
-            <Separator />
+
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Alertas de Clasificación</Label>

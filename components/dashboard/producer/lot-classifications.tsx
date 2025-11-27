@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, Calendar, Beaker, Award, Mail, MessageCircle } from "lucide-react"
+import { AlertCircle, ArrowLeft, Upload, Loader2, CheckCircle2, Calendar, Beaker, Award } from "lucide-react"
 import { classificationService, type ClassificationSession } from "@/lib/services/classification.service"
 import { coffeeLotService, type CoffeeLot } from "@/lib/services/coffee-lot.service"
 import { toast } from "sonner"
@@ -35,7 +35,6 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [showSuccess, setShowSuccess] = useState(false)
     const [completedSession, setCompletedSession] = useState<ClassificationSession | null>(null)
-    const [isSendingEmail, setIsSendingEmail] = useState(false)
     const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(false)
 
     useEffect(() => {
@@ -196,66 +195,6 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
     const handleCloseUploadDialog = () => {
         if (!isProcessing) {
             setIsUploadOpen(false)
-        }
-    }
-
-    // Función para compartir reporte por WhatsApp
-    const handleShareWhatsApp = () => {
-        if (!completedSession || !lot) return
-
-        const quality = getSessionQuality(completedSession)
-        const grainAnalysis = completedSession.analyses?.[0]
-
-        const message = `🌱 *Reporte de Clasificación de Café*\n\n` +
-            `📦 Lote: ${lot.lot_number}\n` +
-            `📊 Sesión: ${completedSession.session_id_vo}\n` +
-            `🔬 Grano ID: ${grainAnalysis?.id || 'N/A'}\n` +
-            `⭐ Puntaje: ${quality.toFixed(1)}%\n` +
-            `🏆 Categoría: ${grainAnalysis?.final_category || 'N/A'}\n` +
-            `⏱️ Tiempo: ${completedSession.processing_time_seconds?.toFixed(1)}s\n\n` +
-            `Generado por BeanDetect AI`
-
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`
-        window.open(whatsappUrl, '_blank')
-
-        toast.success('Compartiendo por WhatsApp', {
-            description: 'Se abrió WhatsApp con el mensaje pre-llenado'
-        })
-    }
-
-    // Función para reenviar email manualmente
-    const handleResendEmail = async () => {
-        if (!completedSession) return
-
-        setIsSendingEmail(true)
-        try {
-            const userStr = localStorage.getItem('user')
-            if (!userStr) {
-                toast.error('No se encontró información del usuario')
-                return
-            }
-
-            const user = JSON.parse(userStr)
-            const result = await classificationService.sendReportByEmail(
-                completedSession.id,
-                user.email
-            )
-
-            if (result.success) {
-                toast.success('Reporte enviado', {
-                    description: result.message
-                })
-            } else {
-                toast.warning('No se pudo enviar el reporte', {
-                    description: result.message
-                })
-            }
-        } catch (err: any) {
-            toast.error('Error al enviar reporte', {
-                description: err.message
-            })
-        } finally {
-            setIsSendingEmail(false)
         }
     }
 
@@ -509,38 +448,6 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Opciones de compartir */}
-                            {completedSession && (
-                                <div className="space-y-3">
-                                    <p className="text-sm font-medium text-gray-700 text-center">
-                                        Compartir resultados
-                                    </p>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <Button
-                                            variant="outline"
-                                            onClick={handleShareWhatsApp}
-                                            className="w-full"
-                                        >
-                                            <MessageCircle className="h-4 w-4 mr-2" />
-                                            WhatsApp
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            onClick={handleResendEmail}
-                                            disabled={isSendingEmail}
-                                            className="w-full"
-                                        >
-                                            {isSendingEmail ? (
-                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                            ) : (
-                                                <Mail className="h-4 w-4 mr-2" />
-                                            )}
-                                            Email
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
 
                             <p className="text-xs text-center text-gray-500">
                                 Redirigiendo a los resultados...
