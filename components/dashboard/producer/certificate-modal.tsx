@@ -4,7 +4,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Download, Mail } from "lucide-react"
+import { Download } from "lucide-react"
 import { ClassificationSession } from "@/lib/services/classification.service"
 import { certificateService } from "@/lib/services/certificate.service"
 import { useState } from "react"
@@ -13,10 +13,10 @@ interface CertificateModalProps {
     sessions: ClassificationSession[] // Ahora acepta múltiples sesiones
     coffeeLotId: number
     open: boolean
-    onOpenChange: (open: boolean) => void
+    onOpenChangeAction: (open: boolean) => void
 }
 
-export function CertificateModal({ sessions, coffeeLotId, open, onOpenChange }: CertificateModalProps) {
+export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeAction }: CertificateModalProps) {
     const [qrImageUrl, setQrImageUrl] = useState<string>("")
 
     // Generar datos consolidados cuando se abre el modal
@@ -26,7 +26,7 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChange }: 
             const url = certificateService.generateConsolidatedQRImageURL(lotData, 400)
             setQrImageUrl(url)
         }
-        onOpenChange(isOpen)
+        onOpenChangeAction(isOpen)
     }
 
     const handleDownloadPDF = () => {

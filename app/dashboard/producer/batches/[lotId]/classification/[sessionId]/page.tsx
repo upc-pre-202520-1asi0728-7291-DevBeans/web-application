@@ -3,15 +3,16 @@
 import { SessionDetails } from "@/components/dashboard/producer/session-details"
 
 interface PageProps {
-    params: {
+    params: Promise<{
         lotId: string
         sessionId: string
-    }
+    }>
 }
 
-export default function SessionDetailsPage({ params }: PageProps) {
-    const lotId = parseInt(params.lotId)
-    const sessionId = parseInt(params.sessionId)
+export default async function SessionDetailsPage({ params }: PageProps) {
+    const { lotId, sessionId } = await params
+    const lotIdNumber = parseInt(lotId)
+    const sessionIdNumber = parseInt(sessionId)
 
-    return <SessionDetails sessionId={sessionId} lotId={lotId} />
+    return <SessionDetails sessionId={sessionIdNumber} lotId={lotIdNumber} />
 }

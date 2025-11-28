@@ -468,7 +468,7 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
                 sessions={selectedLot.sessions}
                 coffeeLotId={selectedLot.coffeeLotId}
                 open={modalOpen}
-                onOpenChange={setModalOpen}
+                onOpenChangeAction={setModalOpen}
             />
         )}
 

@@ -10,7 +10,7 @@ export const API_BASE_URL = 'http://localhost:8000';
  * Base Service with common methods for API services
  */
 export abstract class BaseService {
-    protected getToken(): string | null {
+    getToken(): string | null {
         if (typeof window !== "undefined") {
             return localStorage.getItem("access_token");
         }

@@ -1,15 +1,16 @@
-// app/dashboard/producer/batches/classifications/page.tsx
+// app/dashboard/producer/batches/[lotId]/classifications/page.tsx
 
 import { LotClassifications } from "@/components/dashboard/producer/lot-classifications"
 
 interface PageProps {
-    params: {
+    params: Promise<{
         lotId: string
-    }
+    }>
 }
 
-export default function ClassificationsPage({ params }: PageProps) {
-    const lotId = parseInt(params.lotId)
+export default async function ClassificationsPage({ params }: PageProps) {
+    const { lotId } = await params
+    const lotIdNumber = parseInt(lotId)
 
-    return <LotClassifications lotId={lotId} />
+    return <LotClassifications lotId={lotIdNumber} />
 }
