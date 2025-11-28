@@ -6,9 +6,8 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, CheckCircle2 } from "lucide-react"
+import { AlertCircle, CheckCircle2, Wifi, RefreshCw } from "lucide-react"
 import { useAuth } from "@/hooks/contexts/auth-context"
 import { userService, type ProducerProfile, type UpdateProfileData, type ChangePasswordData } from "@/lib/services/user.service"
 
@@ -33,15 +32,10 @@ export function ProducerSettings() {
     confirm_password: "",
   })
 
-  // Estados de notificaciones y configuración (localStorage)
+  // Estados de notificaciones (localStorage)
   const [notifications, setNotifications] = useState({
     email: true,
     classification: true,
-  })
-
-  const [systemSettings, setSystemSettings] = useState({
-    offline: false,
-    autoSync: true,
   })
 
   // Estados de carga y mensajes
@@ -69,11 +63,6 @@ export function ProducerSettings() {
     if (savedNotifications) {
       setNotifications(JSON.parse(savedNotifications))
     }
-
-    const savedSystemSettings = localStorage.getItem('systemSettings')
-    if (savedSystemSettings) {
-      setSystemSettings(JSON.parse(savedSystemSettings))
-    }
   }, [producerProfile])
 
   // Actualizar perfil
@@ -99,8 +88,6 @@ export function ProducerSettings() {
       await refreshProfile()
 
       setProfileMessage({ type: 'success', text: 'Perfil actualizado exitosamente' })
-
-      // Limpiar mensaje después de 5 segundos
       setTimeout(() => setProfileMessage(null), 5000)
     } catch (error) {
       setProfileMessage({
@@ -119,7 +106,6 @@ export function ProducerSettings() {
 
     setPasswordMessage(null)
 
-    // Validaciones
     if (passwordForm.new_password !== passwordForm.confirm_password) {
       setPasswordMessage({ type: 'error', text: 'Las contraseñas no coinciden' })
       return
@@ -139,17 +125,14 @@ export function ProducerSettings() {
       }
 
       await userService.changePassword(user.id, changePasswordData)
-
       setPasswordMessage({ type: 'success', text: 'Contraseña actualizada exitosamente' })
 
-      // Limpiar formulario
       setPasswordForm({
         current_password: "",
         new_password: "",
         confirm_password: "",
       })
 
-      // Limpiar mensaje después de 5 segundos
       setTimeout(() => setPasswordMessage(null), 5000)
     } catch (error) {
       setPasswordMessage({
@@ -166,13 +149,6 @@ export function ProducerSettings() {
     const newNotifications = { ...notifications, [key]: !notifications[key] }
     setNotifications(newNotifications)
     localStorage.setItem('notifications', JSON.stringify(newNotifications))
-  }
-
-  // Gestionar configuración del sistema
-  const handleSystemSettingChange = (key: keyof typeof systemSettings) => {
-    const newSettings = { ...systemSettings, [key]: !systemSettings[key] }
-    setSystemSettings(newSettings)
-    localStorage.setItem('systemSettings', JSON.stringify(newSettings))
   }
 
   if (!producerProfile) {
@@ -210,7 +186,7 @@ export function ProducerSettings() {
                   </Alert>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="first_name">Nombre</Label>
                   <Input
@@ -230,7 +206,8 @@ export function ProducerSettings() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Correo Electrónico</Label>
                   <Input
@@ -251,7 +228,8 @@ export function ProducerSettings() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="farm_name">Nombre de la Finca</Label>
                   <Input
@@ -271,7 +249,8 @@ export function ProducerSettings() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="hectares">Hectáreas</Label>
                   <Input
@@ -293,6 +272,7 @@ export function ProducerSettings() {
                   />
                 </div>
               </div>
+
               <Button
                   type="submit"
                   className="bg-amber-700 hover:bg-amber-800"
@@ -311,13 +291,14 @@ export function ProducerSettings() {
             <CardDescription>Configura cómo quieres recibir notificaciones</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Info sobre email */}
             <Alert className="bg-blue-50 border-blue-200">
               <AlertCircle className="h-4 w-4 text-blue-600" />
               <AlertDescription className="text-sm text-blue-900">
                 Los reportes por email se enviarán a: <strong>{user?.email}</strong>
                 <br />
-                <span className="text-xs">El administrador debe configurar el servidor SMTP en el backend para habilitar el envío automático.</span>
+                <span className="text-xs text-gray-600 mt-1">
+                El administrador debe configurar el servidor SMTP en el backend para habilitar el envío automático.
+              </span>
               </AlertDescription>
             </Alert>
 
@@ -405,34 +386,36 @@ export function ProducerSettings() {
           </CardContent>
         </Card>
 
-        {/* System Configuration */}
+        {/* System Info - SOLO INFORMATIVO, SIN TOGGLES */}
         <Card>
           <CardHeader>
-            <CardTitle>Configuración del Sistema</CardTitle>
-            <CardDescription>Ajusta las preferencias de la aplicación</CardDescription>
+            <CardTitle>Funcionalidades del Sistema</CardTitle>
+            <CardDescription>Características siempre activas para tu comodidad</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Modo Offline</Label>
-                <p className="text-sm text-gray-500">Permite usar la app sin conexión a internet</p>
-              </div>
-              <Switch
-                  checked={systemSettings.offline}
-                  onCheckedChange={() => handleSystemSettingChange('offline')}
-              />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Sincronización Automática</Label>
-                <p className="text-sm text-gray-500">Sincroniza datos automáticamente cuando hay conexión</p>
-              </div>
-              <Switch
-                  checked={systemSettings.autoSync}
-                  onCheckedChange={() => handleSystemSettingChange('autoSync')}
-              />
-            </div>
+          <CardContent className="space-y-3">
+            <Alert className="bg-green-50 border-green-200">
+              <Wifi className="h-4 w-4 text-green-600" />
+              <AlertDescription>
+                <div>
+                  <p className="font-semibold text-green-900">✓ Modo Offline Activo</p>
+                  <p className="text-xs text-green-700 mt-1">
+                    Trabaja sin conexión. Los cambios se guardan localmente y se sincronizarán automáticamente.
+                  </p>
+                </div>
+              </AlertDescription>
+            </Alert>
+
+            <Alert className="bg-blue-50 border-blue-200">
+              <RefreshCw className="h-4 w-4 text-blue-600" />
+              <AlertDescription>
+                <div>
+                  <p className="font-semibold text-blue-900">✓ Sincronización Automática</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Al recuperar la conexión, tus cambios se sincronizarán automáticamente con el servidor.
+                  </p>
+                </div>
+              </AlertDescription>
+            </Alert>
           </CardContent>
         </Card>
       </div>

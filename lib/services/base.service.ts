@@ -3,8 +3,8 @@
 /**
  * Base API URL
  */
-//export const API_BASE_URL = 'https://bean-detect-ai-api-platform.azurewebsites.net';
-export const API_BASE_URL = 'http://localhost:8000';
+export const API_BASE_URL = 'https://bean-detect-ai-api-platform.azurewebsites.net';
+//export const API_BASE_URL = 'http://localhost:8000';
 
 /**
  * Base Service with common methods for API services

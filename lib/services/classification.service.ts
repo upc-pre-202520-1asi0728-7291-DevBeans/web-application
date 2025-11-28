@@ -1,6 +1,7 @@
-// lib/services/classification.service.ts
+// lib/services/classification.service.ts (CON SOPORTE OFFLINE)
 
 import { BaseService, API_BASE_URL } from './base.service';
+import { offlineService } from './offline.service';
 
 // Interface for individual grain analysis data
 export interface GrainAnalysis {
@@ -71,7 +72,12 @@ class ClassificationService extends BaseService {
             body: formData,
         });
 
-        return this.handleResponse<ClassificationSession>(response);
+        const session = await this.handleResponse<ClassificationSession>(response);
+
+        // Guardar en IndexedDB
+        await offlineService.saveSessionLocally(session);
+
+        return session;
     }
 
     /**
@@ -91,31 +97,77 @@ class ClassificationService extends BaseService {
     }
 
     /**
-     * Fetch classification sessions by coffee lot ID
+     * Fetch classification sessions by coffee lot ID (con soporte offline)
      */
     async getSessionsByCoffeeLot(coffeeLotId: number): Promise<ClassificationSession[]> {
-        const response = await fetch(
-            `${API_BASE_URL}/api/v1/classification/sessions/coffee-lot/${coffeeLotId}`,
-            {
-                headers: this.getAuthHeaders(),
-            }
-        );
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/api/v1/classification/sessions/coffee-lot/${coffeeLotId}`,
+                {
+                    headers: this.getAuthHeaders(),
+                }
+            );
 
-        return this.handleResponse<ClassificationSession[]>(response);
+            // Verificar si es respuesta offline del SW
+            if (response.status === 503) {
+                const data = await response.json();
+                if (data.offline) {
+                    console.log('[OFFLINE] SW indica offline, cargando sesiones desde IndexedDB');
+                    return await offlineService.getSessionsByCoffeeLotLocally(coffeeLotId);
+                }
+            }
+
+            const sessions = await this.handleResponse<ClassificationSession[]>(response);
+
+            // Guardar en IndexedDB
+            for (const session of sessions) {
+                await offlineService.saveSessionLocally(session);
+            }
+
+            return sessions;
+        } catch (error) {
+            console.log('[OFFLINE] Error de red, cargando sesiones desde IndexedDB');
+            return await offlineService.getSessionsByCoffeeLotLocally(coffeeLotId);
+        }
     }
 
     /**
-     * Fetch a classification session by its ID
+     * Fetch a classification session by its ID (con soporte offline)
      */
     async getSessionById(sessionId: number): Promise<ClassificationSession> {
-        const response = await fetch(
-            `${API_BASE_URL}/api/v1/classification/session/${sessionId}`,
-            {
-                headers: this.getAuthHeaders(),
-            }
-        );
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/api/v1/classification/session/${sessionId}`,
+                {
+                    headers: this.getAuthHeaders(),
+                }
+            );
 
-        return this.handleResponse<ClassificationSession>(response);
+            // Verificar si es respuesta offline del SW
+            if (response.status === 503) {
+                const data = await response.json();
+                if (data.offline) {
+                    console.log('[OFFLINE] SW indica offline, buscando en IndexedDB');
+                    const sessions = await offlineService.getSessionsLocally();
+                    const session = sessions.find(s => s.id === sessionId);
+                    if (!session) return Promise.reject(new Error('Sesión no encontrada en almacenamiento local'));
+                    return session;
+                }
+            }
+
+            const session = await this.handleResponse<ClassificationSession>(response);
+
+            // Guardar en IndexedDB
+            await offlineService.saveSessionLocally(session);
+
+            return session;
+        } catch (error) {
+            console.log('[OFFLINE] Error de red, buscando sesión en IndexedDB');
+            const sessions = await offlineService.getSessionsLocally();
+            const session = sessions.find(s => s.id === sessionId);
+            if (!session) throw new Error('Sesión no encontrada en almacenamiento local');
+            return session;
+        }
     }
 
     /**
@@ -133,17 +185,38 @@ class ClassificationService extends BaseService {
     }
 
     /**
-     * Fetch all classification sessions
+     * Fetch all classification sessions (con soporte offline)
      */
     async getAllSessions(): Promise<ClassificationSession[]> {
-        const response = await fetch(
-            `${API_BASE_URL}/api/v1/classification/sessions`,
-            {
-                headers: this.getAuthHeaders(),
-            }
-        );
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/api/v1/classification/sessions`,
+                {
+                    headers: this.getAuthHeaders(),
+                }
+            );
 
-        return this.handleResponse<ClassificationSession[]>(response);
+            // Verificar si es respuesta offline del SW
+            if (response.status === 503) {
+                const data = await response.json();
+                if (data.offline) {
+                    console.log('[OFFLINE] SW indica offline, cargando todas las sesiones desde IndexedDB');
+                    return await offlineService.getSessionsLocally();
+                }
+            }
+
+            const sessions = await this.handleResponse<ClassificationSession[]>(response);
+
+            // Guardar en IndexedDB
+            for (const session of sessions) {
+                await offlineService.saveSessionLocally(session);
+            }
+
+            return sessions;
+        } catch (error) {
+            console.log('[OFFLINE] Error de red, cargando todas las sesiones desde IndexedDB');
+            return await offlineService.getSessionsLocally();
+        }
     }
 }
 
