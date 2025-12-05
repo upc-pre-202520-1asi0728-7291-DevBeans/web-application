@@ -4,13 +4,15 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Download } from "lucide-react"
+import { Download, Loader2 } from "lucide-react"
 import { ClassificationSession } from "@/lib/services/classification.service"
 import { certificateService } from "@/lib/services/certificate.service"
-import { useState } from "react"
+import { CertificationHashDisplay } from "./certification-hash-display"
+import { useCertification } from "@/hooks/use-certification"
+import { useState, useEffect } from "react"
 
 interface CertificateModalProps {
-    sessions: ClassificationSession[] // Ahora acepta múltiples sesiones
+    sessions: ClassificationSession[]
     coffeeLotId: number
     open: boolean
     onOpenChangeAction: (open: boolean) => void
@@ -18,11 +20,26 @@ interface CertificateModalProps {
 
 export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeAction }: CertificateModalProps) {
     const [qrImageUrl, setQrImageUrl] = useState<string>("")
+    const { certifications, loadCertificationsByLot, loading: loadingCert } = useCertification()
+
+    // Cargar certificaciones del lote cuando se abre el modal
+    useEffect(() => {
+        if (open && coffeeLotId) {
+            loadCertificationsByLot(coffeeLotId)
+        }
+    }, [open, coffeeLotId])
 
     // Generar datos consolidados cuando se abre el modal
     const handleOpen = (isOpen: boolean) => {
         if (isOpen && sessions && sessions.length > 0) {
             const lotData = certificateService.consolidateLotData(sessions)
+
+            // Agregar certificación si existe
+            if (certifications.length > 0) {
+                lotData.certification = certifications[0] // Usar la más reciente
+                lotData.blockchainHash = certifications[0].certification_hash
+            }
+
             const url = certificateService.generateConsolidatedQRImageURL(lotData, 400)
             setQrImageUrl(url)
         }
@@ -32,6 +49,10 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
     const handleDownloadPDF = () => {
         if (sessions && sessions.length > 0) {
             const lotData = certificateService.consolidateLotData(sessions)
+            if (certifications.length > 0) {
+                lotData.certification = certifications[0]
+                lotData.blockchainHash = certifications[0].certification_hash
+            }
             certificateService.generateConsolidatedPDF(lotData)
         }
     }
@@ -39,6 +60,10 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
     const handleDownloadCSV = () => {
         if (sessions && sessions.length > 0) {
             const lotData = certificateService.consolidateLotData(sessions)
+            if (certifications.length > 0) {
+                lotData.certification = certifications[0]
+                lotData.blockchainHash = certifications[0].certification_hash
+            }
             certificateService.generateConsolidatedCSV(lotData)
         }
     }
@@ -49,15 +74,40 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
 
     // Calcular datos consolidados para mostrar
     const lotData = certificateService.consolidateLotData(sessions)
+    const hasCertification = certifications.length > 0
 
     return (
         <Dialog open={open} onOpenChange={handleOpen}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Certificado del Lote #{coffeeLotId}</DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-6">
+                    {/* Certificación Blockchain */}
+                    {loadingCert && (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-amber-700" />
+                            <span className="ml-2 text-gray-600">Cargando certificación...</span>
+                        </div>
+                    )}
+
+                    {!loadingCert && hasCertification && (
+                        <CertificationHashDisplay
+                            certification={certifications[0]}
+                            showUnlockButton={true}
+                        />
+                    )}
+
+                    {!loadingCert && !hasCertification && (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <p className="text-sm text-yellow-900">
+                                ⚠️ Este lote aún no tiene certificación blockchain.
+                                La certificación se genera automáticamente al completar clasificaciones.
+                            </p>
+                        </div>
+                    )}
+
                     {/* QR Code */}
                     <div className="flex justify-center">
                         <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
@@ -150,7 +200,8 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
                         <p className="text-xs">
                             Este certificado consolida el análisis de <strong>{lotData.totalGrainsAnalyzed} granos</strong> del Lote #{coffeeLotId},
                             procesados en <strong>{lotData.totalSessions} sesiones de clasificación</strong>.
-                            El código QR contiene información detallada del lote y puede ser escaneado para verificar la autenticidad.
+                            {hasCertification && " El certificado está protegido con hash blockchain inmutable para garantizar su autenticidad."}
+                            {!hasCertification && " La certificación blockchain se generará automáticamente al completar más clasificaciones."}
                         </p>
                     </div>
 
@@ -176,6 +227,7 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
                     {/* Nota sobre el QR */}
                     <p className="text-xs text-gray-500 text-center">
                         Escanea el código QR para ver los detalles completos del lote
+                        {hasCertification && " y verificar el hash blockchain"}
                     </p>
                 </div>
             </DialogContent>

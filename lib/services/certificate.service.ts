@@ -1,10 +1,11 @@
 // lib/services/certificate.service.ts
-// Versión consolidada - Genera certificados por LOTE (no por sesión)
+// Versión consolidada - Genera certificados por LOTE con blockchain
 
 // @ts-ignore
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { ClassificationSession, GrainAnalysis } from './classification.service'
+import { CertificationRecord, certificationService } from './certification.service'
 
 // Interfaz para datos consolidados del lote
 interface ConsolidatedLotData {
@@ -25,6 +26,9 @@ interface ConsolidatedLotData {
     firstClassificationDate: string
     lastClassificationDate: string
     totalProcessingTime: number
+    // Campos de blockchain
+    certification?: CertificationRecord
+    blockchainHash?: string
 }
 
 export class CertificateService {
@@ -120,7 +124,7 @@ export class CertificateService {
     }
 
     /**
-     * Genera PDF consolidado del lote
+     * Genera PDF consolidado del lote con información blockchain
      */
     generateConsolidatedPDF(lotData: ConsolidatedLotData): void {
         const doc = new jsPDF()
@@ -138,8 +142,20 @@ export class CertificateService {
         doc.setDrawColor(180, 180, 180)
         doc.line(20, 35, 190, 35)
 
+        // Información blockchain si existe
+        let startY = 45
+        if (lotData.certification) {
+            doc.setFontSize(10)
+            doc.setTextColor(100, 100, 100)
+            doc.text('🔒 Certificado Blockchain', 20, startY)
+            doc.setFontSize(8)
+            doc.text(`ID: ${lotData.certification.certification_id}`, 20, startY + 5)
+            doc.text(`Hash: ${lotData.certification.certification_hash.substring(0, 40)}...`, 20, startY + 10)
+            doc.text(`Token: ${lotData.certification.verification_token}`, 20, startY + 15)
+            startY += 25
+        }
+
         // SUBTÍTULO: Resultados de Clasificación
-        const startY = 45
         doc.setFontSize(14)
         doc.setTextColor(0, 0, 0)
         doc.text('Resultados de Clasificación del Lote', 20, startY)
@@ -244,12 +260,18 @@ export class CertificateService {
         doc.text('BeanDetect AI - Sistema de Clasificación de Café por IA', 105, pageHeight - 10, { align: 'center' })
         doc.text(`Generado el ${new Date().toLocaleString('es-PE')}`, 105, pageHeight - 5, { align: 'center' })
 
+        // Nota de blockchain si existe
+        if (lotData.certification) {
+            doc.setFontSize(7)
+            doc.text('✓ Certificado verificable en blockchain', 105, pageHeight - 15, { align: 'center' })
+        }
+
         // Descargar
         doc.save(`certificado-lote-${lotData.coffeeLotId}.pdf`)
     }
 
     /**
-     * Genera CSV consolidado del lote
+     * Genera CSV consolidado del lote con datos blockchain
      */
     generateConsolidatedCSV(lotData: ConsolidatedLotData): void {
         const headers = [
@@ -270,7 +292,6 @@ export class CertificateService {
         const rows = lotData.allAnalyses.map((analysis, idx) => {
             const colors = analysis.color_percentages
             const features = analysis.features
-            const assessment = analysis.quality_assessment
 
             // Encontrar a qué sesión pertenece este análisis
             const session = lotData.sessions.find(s =>
@@ -302,7 +323,23 @@ export class CertificateService {
             [`Categoría Predominante: ${lotData.predominantCategory}`],
             [`Primera Clasificación: ${new Date(lotData.firstClassificationDate).toLocaleString('es-PE')}`],
             [`Última Clasificación: ${new Date(lotData.lastClassificationDate).toLocaleString('es-PE')}`],
-            [],
+            []
+        ]
+
+        // Agregar información blockchain si existe
+        if (lotData.certification) {
+            header.push(
+                [`=== CERTIFICACIÓN BLOCKCHAIN ===`],
+                [`ID de Certificado: ${lotData.certification.certification_id}`],
+                [`Hash SHA-256: ${lotData.certification.certification_hash}`],
+                [`Token de Verificación: ${lotData.certification.verification_token}`],
+                [`Estado: ${lotData.certification.status}`],
+                [`Certificado el: ${new Date(lotData.certification.certified_at).toLocaleString('es-PE')}`],
+                []
+            )
+        }
+
+        header.push(
             [`Distribución de Calidad:`],
             [`Specialty: ${lotData.categoryDistribution.Specialty.count} (${lotData.categoryDistribution.Specialty.percentage.toFixed(1)}%)`],
             [`Premium: ${lotData.categoryDistribution.Premium.count} (${lotData.categoryDistribution.Premium.percentage.toFixed(1)}%)`],
@@ -311,7 +348,7 @@ export class CertificateService {
             [`C: ${lotData.categoryDistribution.C.count} (${lotData.categoryDistribution.C.percentage.toFixed(1)}%)`],
             [],
             headers
-        ]
+        )
 
         const csvContent = [
             ...header,
@@ -332,10 +369,11 @@ export class CertificateService {
     }
 
     /**
-     * Genera datos QR consolidados del lote
+     * Genera datos QR consolidados del lote con información blockchain
      */
     generateConsolidatedQRData(lotData: ConsolidatedLotData): string {
         const qrData = {
+            type: 'BeanDetect_Traceability',
             lot_id: lotData.coffeeLotId,
             total_grains: lotData.totalGrainsAnalyzed,
             total_sessions: lotData.totalSessions,
@@ -350,7 +388,20 @@ export class CertificateService {
                 B: lotData.categoryDistribution.B.count,
                 C: lotData.categoryDistribution.C.count
             },
-            url: typeof window !== 'undefined'
+            // Datos de blockchain
+            certification_id: lotData.certification?.certification_id,
+            certification_hash: lotData.blockchainHash || lotData.certification?.certification_hash,
+            verification_token: lotData.certification?.verification_token,
+            certified_at: lotData.certification?.certified_at,
+            blockchain_verified: !!lotData.certification,
+            // URLs
+            verify_url: typeof window !== 'undefined' && lotData.certification
+                ? `${window.location.origin}/verify/${lotData.certification.verification_token}`
+                : '',
+            blockchain_url: typeof window !== 'undefined' && lotData.blockchainHash
+                ? certificationService.getBlockchainExplorerUrl(lotData.blockchainHash)
+                : '',
+            lot_url: typeof window !== 'undefined'
                 ? `${window.location.origin}/dashboard/producer/batches/${lotData.coffeeLotId}/classifications`
                 : ''
         }
@@ -374,7 +425,6 @@ export class CertificateService {
      * @deprecated Use generateConsolidatedPDF instead
      */
     generatePDF(session: ClassificationSession): void {
-        // Convertir sesión individual a formato consolidado
         const lotData = this.consolidateLotData([session])
         this.generateConsolidatedPDF(lotData)
     }

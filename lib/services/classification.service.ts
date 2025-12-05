@@ -1,7 +1,8 @@
-// lib/services/classification.service.ts (CON SOPORTE OFFLINE)
+// lib/services/classification.service.ts (CON SOPORTE OFFLINE Y BLOCKCHAIN)
 
 import { BaseService, API_BASE_URL } from './base.service';
 import { offlineService } from './offline.service';
+import { generateCertificationAfterClassification } from '@/lib/utils/auto-certification-integration';
 
 // Interface for individual grain analysis data
 export interface GrainAnalysis {
@@ -76,6 +77,15 @@ class ClassificationService extends BaseService {
 
         // Guardar en IndexedDB
         await offlineService.saveSessionLocally(session);
+
+        // 🔗 BLOCKCHAIN: Generar certificación automáticamente si está completa
+        if (session.status === 'COMPLETED') {
+            console.log('[BLOCKCHAIN] Sesión completada, generando certificación...')
+            generateCertificationAfterClassification(session).catch(err => {
+                console.error('[BLOCKCHAIN] Error generando certificación:', err)
+                // No lanzar error para no interrumpir el flujo
+            })
+        }
 
         return session;
     }
