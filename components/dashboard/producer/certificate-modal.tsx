@@ -74,6 +74,11 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
             // URL para ver detalles completos (solo para productores)
             details_url: userRole === 'PRODUCER'
                 ? `${window.location.origin}/dashboard/producer/batches/${data.coffeeLotId}/classifications`
+                : undefined,
+            // Token de verificación si existe certificación
+            verification_token: certification?.verification_token,
+            verification_url: certification
+                ? certificationService.getPublicVerificationUrl(certification.verification_token)
                 : undefined
         }
 
@@ -236,7 +241,7 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <Shield className="h-5 w-5 text-amber-700" />
-                                        <p className="text-sm font-semibold text-gray-900">Hash de Certificación</p>
+                                        <p className="text-sm font-semibold text-gray-900">Hash de Certificación Blockchain</p>
                                     </div>
                                     {!hashUnlocked && (
                                         <Button
@@ -255,36 +260,46 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
                                         {certification.certification_hash}
                                     </div>
                                     {hashUnlocked && (
-                                        <div className="flex gap-2 mt-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => copyToClipboard(certification.certification_hash)}
-                                                className="flex-1"
-                                            >
-                                                {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-                                                Copiar Hash
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                onClick={() => {
-                                                    const url = certificationService.getBlockchainExplorerUrl(certification.certification_hash)
-                                                    window.open(url, '_blank')
-                                                }}
-                                                className="flex-1 bg-blue-600 hover:bg-blue-700"
-                                            >
-                                                <ExternalLink className="h-4 w-4 mr-2" />
-                                                Ver en Blockchain
-                                            </Button>
+                                        <div className="flex flex-col gap-2 mt-2">
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => copyToClipboard(certification.certification_hash)}
+                                                    className="flex-1"
+                                                >
+                                                    {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+                                                    Copiar Hash
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        const verifyUrl = `/verify/${certification.verification_token}`
+                                                        window.open(verifyUrl, '_blank')
+                                                    }}
+                                                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                                >
+                                                    <ExternalLink className="h-4 w-4 mr-2" />
+                                                    Verificar
+                                                </Button>
+                                            </div>
+
+                                            {/* Token de verificación */}
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                                <p className="text-xs font-semibold text-blue-900 mb-1">Token de Verificación Pública:</p>
+                                                <code className="text-xs font-mono text-blue-800 break-all">
+                                                    {certification.verification_token}
+                                                </code>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
 
                                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                                     <p className="text-xs text-blue-900">
-                                        <strong>🔒 Seguridad:</strong> Este hash es inmutable y único.
+                                        <strong>🔒 Seguridad:</strong> Este hash SHA-256 es inmutable y único.
                                         Cualquier modificación en los datos de clasificación generaría un hash diferente,
-                                        garantizando la integridad de la información.
+                                        garantizando la integridad de la información. Haz clic en "Verificar" para abrir la página de verificación pública.
                                     </p>
                                 </div>
                             </div>
@@ -347,6 +362,7 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
                             <strong>Trazabilidad:</strong> Este certificado consolida todas las clasificaciones
                             realizadas para este lote de café. El código QR contiene información verificable
                             que puede ser escaneada para acceder a los detalles completos.
+                            {certification && ' Este certificado está respaldado por un hash blockchain verificable.'}
                         </p>
                     </div>
                 </div>

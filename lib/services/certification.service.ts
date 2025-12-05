@@ -175,13 +175,23 @@ class CertificationService extends BaseService {
     }
 
     /**
-     * Genera URL de blockchain explorer (simulado por ahora)
-     * TODO: Integrar con blockchain real cuando esté disponible
+     * Genera URL de blockchain explorer
+     * Ahora usa la API de verificación pública correctamente
      */
     getBlockchainExplorerUrl(certificationHash: string): string {
-        // Por ahora redirige a la verificación pública
-        // Cuando tengas blockchain real, cambiar esta URL
-        return `${window.location.origin}/verify/${certificationHash}`;
+        // Usa el endpoint de verificación por hash del backend
+        return `${API_BASE_URL}/api/v1/certifications/verify/hash/${certificationHash}`;
+    }
+
+    /**
+     * Genera URL de verificación pública por token
+     */
+    getPublicVerificationUrl(verificationToken: string): string {
+        // URL amigable en el frontend para verificación pública
+        if (typeof window !== 'undefined') {
+            return `${window.location.origin}/verify/${verificationToken}`;
+        }
+        return `${API_BASE_URL}/api/v1/certifications/verify/token/${verificationToken}`;
     }
 
     /**
@@ -199,8 +209,10 @@ class CertificationService extends BaseService {
             total_grains: certification.total_grains_analyzed,
             certified_at: certification.certified_at,
             status: certification.status,
-            verify_url: `${window.location.origin}/verify/${certification.verification_token}`,
-            blockchain_url: this.getBlockchainExplorerUrl(certification.certification_hash)
+            // URL de verificación pública (funciona sin autenticación)
+            verify_url: this.getPublicVerificationUrl(certification.verification_token),
+            // URL de la API de verificación por hash
+            api_verify_url: this.getBlockchainExplorerUrl(certification.certification_hash)
         };
 
         return JSON.stringify(qrData, null, 2);
