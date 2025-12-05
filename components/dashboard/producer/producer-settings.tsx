@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, CheckCircle2, Wifi, RefreshCw } from "lucide-react"
+import { AlertCircle, CheckCircle2 } from "lucide-react"
 import { useAuth } from "@/hooks/contexts/auth-context"
 import { userService, type ProducerProfile, type UpdateProfileData, type ChangePasswordData } from "@/lib/services/user.service"
 
@@ -383,39 +383,6 @@ export function ProducerSettings() {
                 {isLoadingPassword ? "Cambiando..." : "Cambiar Contraseña"}
               </Button>
             </form>
-          </CardContent>
-        </Card>
-
-        {/* System Info - SOLO INFORMATIVO, SIN TOGGLES */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Funcionalidades del Sistema</CardTitle>
-            <CardDescription>Características siempre activas para tu comodidad</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Alert className="bg-green-50 border-green-200">
-              <Wifi className="h-4 w-4 text-green-600" />
-              <AlertDescription>
-                <div>
-                  <p className="font-semibold text-green-900">✓ Modo Offline Activo</p>
-                  <p className="text-xs text-green-700 mt-1">
-                    Trabaja sin conexión. Los cambios se guardan localmente y se sincronizarán automáticamente.
-                  </p>
-                </div>
-              </AlertDescription>
-            </Alert>
-
-            <Alert className="bg-blue-50 border-blue-200">
-              <RefreshCw className="h-4 w-4 text-blue-600" />
-              <AlertDescription>
-                <div>
-                  <p className="font-semibold text-blue-900">✓ Sincronización Automática</p>
-                  <p className="text-xs text-blue-700 mt-1">
-                    Al recuperar la conexión, tus cambios se sincronizarán automáticamente con el servidor.
-                  </p>
-                </div>
-              </AlertDescription>
-            </Alert>
           </CardContent>
         </Card>
       </div>
