@@ -124,9 +124,9 @@ export class CertificateService {
     }
 
     /**
-     * Genera PDF consolidado del lote con información blockchain
+     * Genera PDF consolidado del lote con información y QR
      */
-    generateConsolidatedPDF(lotData: ConsolidatedLotData): void {
+    async generateConsolidatedPDF(lotData: ConsolidatedLotData): Promise<void> {
         const doc = new jsPDF()
 
         // Header
@@ -136,24 +136,33 @@ export class CertificateService {
 
         doc.setFontSize(16)
         doc.setTextColor(0, 0, 0)
-        doc.text('Certificado de Clasificación de Café', 105, 30, { align: 'center' })
+        doc.text('Certificado de Clasificacion de Cafe', 105, 30, { align: 'center' })
 
         // Línea decorativa
         doc.setDrawColor(180, 180, 180)
         doc.line(20, 35, 190, 35)
 
-        // Información blockchain si existe
+        // QR Code en la esquina superior derecha
         let startY = 45
-        if (lotData.certification) {
-            doc.setFontSize(10)
-            doc.setTextColor(100, 100, 100)
-            doc.text('🔒 Certificado Blockchain', 20, startY)
-            doc.setFontSize(8)
-            doc.text(`ID: ${lotData.certification.certification_id}`, 20, startY + 5)
-            doc.text(`Hash: ${lotData.certification.certification_hash.substring(0, 40)}...`, 20, startY + 10)
-            doc.text(`Token: ${lotData.certification.verification_token}`, 20, startY + 15)
-            startY += 25
+
+        // Generar QR
+        const qrData = {
+            type: 'BeanDetect_Certificate',
+            lot_id: lotData.coffeeLotId,
+            total_grains: lotData.totalGrainsAnalyzed,
+            quality: lotData.averageQuality.toFixed(1),
+            category: lotData.predominantCategory,
         }
+        const qrEncoded = encodeURIComponent(JSON.stringify(qrData))
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrEncoded}`
+
+        try {
+            doc.addImage(qrUrl, 'PNG', 150, startY, 35, 35)
+        } catch (error) {
+            console.warn('No se pudo agregar QR al PDF')
+        }
+
+        startY += 5
 
         // SUBTÍTULO: Resultados de Clasificación
         doc.setFontSize(14)
@@ -263,7 +272,7 @@ export class CertificateService {
         // Nota de blockchain si existe
         if (lotData.certification) {
             doc.setFontSize(7)
-            doc.text('✓ Certificado verificable en blockchain', 105, pageHeight - 15, { align: 'center' })
+            doc.text('Certificado verificable en blockchain', 105, pageHeight - 15, { align: 'center' })
         }
 
         // Descargar
@@ -373,10 +382,9 @@ export class CertificateService {
      */
     generateConsolidatedQRData(lotData: ConsolidatedLotData): string {
         const qrData = {
-            type: 'BeanDetect_Traceability',
+            type: 'BeanDetect_Certificate',
             lot_id: lotData.coffeeLotId,
             total_grains: lotData.totalGrainsAnalyzed,
-            total_sessions: lotData.totalSessions,
             average_quality: lotData.averageQuality,
             predominant_category: lotData.predominantCategory,
             first_classification: new Date(lotData.firstClassificationDate).toISOString(),

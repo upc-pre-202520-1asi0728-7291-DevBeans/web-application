@@ -1,7 +1,8 @@
-// lib/services/classification.service.ts (CON BLOCKCHAIN - SIN OFFLINE)
+// lib/services/classification.service.ts
+// FIXED: Con delay para asegurar que la certificación se cree después de que la sesión esté completamente guardada
 
 import { BaseService, API_BASE_URL } from './base.service';
-import { generateCertificationAfterClassification } from '@/lib/utils/auto-certification-integration';
+import { generateCertificationWithDelay } from '@/lib/utils/auto-certification-integration';
 
 // Interface for individual grain analysis data
 export interface GrainAnalysis {
@@ -45,6 +46,7 @@ export interface AverageQuality {
 class ClassificationService extends BaseService {
     /**
      * Start a new classification session
+     * FIXED: Con delay para certificación blockchain
      */
     async startClassificationSession(
         coffeeLotId: number,
@@ -66,6 +68,8 @@ class ClassificationService extends BaseService {
             formData.append('send_email_notification', 'true');
         }
 
+        console.log('[CLASSIFICATION] Iniciando sesión de clasificación...')
+
         const response = await fetch(`${API_BASE_URL}/api/v1/classification/session`, {
             method: 'POST',
             headers: this.getAuthHeadersNoContentType(),
@@ -74,13 +78,24 @@ class ClassificationService extends BaseService {
 
         const session = await this.handleResponse<ClassificationSession>(response);
 
-        // 🔗 BLOCKCHAIN: Generar certificación automáticamente si está completa
+        console.log('[CLASSIFICATION] Sesión creada:', {
+            id: session.id,
+            session_id_vo: session.session_id_vo,
+            status: session.status,
+            analyses_count: session.analyses?.length || 0
+        })
+
+        // 🔗 BLOCKCHAIN: Generar certificación con delay de 2 segundos
         if (session.status === 'COMPLETED') {
-            console.log('[BLOCKCHAIN] Sesión completada, generando certificación...')
-            generateCertificationAfterClassification(session).catch(err => {
-                console.error('[BLOCKCHAIN] Error generando certificación:', err)
+            console.log('[CLASSIFICATION] Sesión completada, programando certificación...')
+
+            // Ejecutar en background sin bloquear la respuesta
+            generateCertificationWithDelay(session, 2000).catch(err => {
+                console.error('[CLASSIFICATION] Error en certificación background:', err)
                 // No lanzar error para no interrumpir el flujo
             })
+        } else {
+            console.warn('[CLASSIFICATION] Sesión no completada, estado:', session.status)
         }
 
         return session;

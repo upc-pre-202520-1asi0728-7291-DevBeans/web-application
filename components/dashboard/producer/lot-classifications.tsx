@@ -41,7 +41,6 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         loadData()
     }, [lotId])
 
-    // Verificar estado de notificaciones por email
     useEffect(() => {
         const checkEmailNotifications = () => {
             const savedNotifications = localStorage.getItem('notifications')
@@ -55,13 +54,11 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
 
         checkEmailNotifications()
 
-        // Actualizar cuando se abre el diálogo
         if (isUploadOpen) {
             checkEmailNotifications()
         }
     }, [isUploadOpen])
 
-    // Reset completo cuando se cierra el diálogo
     useEffect(() => {
         if (!isUploadOpen) {
             setSelectedFile(null)
@@ -77,16 +74,13 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         setError("")
 
         try {
-            // Cargar información del lote
             const lotData = await coffeeLotService.getLotById(lotId)
             setLot(lotData)
 
-            // Cargar sesiones de clasificación
             try {
                 const sessionsData = await classificationService.getSessionsByCoffeeLot(lotId)
                 setSessions(sessionsData)
             } catch (err: any) {
-                // Si no hay sesiones, no es un error crítico
                 if (err.message.includes("404")) {
                     setSessions([])
                 } else {
@@ -122,18 +116,15 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
         setError("")
 
         try {
-            // Leer preferencias de notificación desde localStorage
             const savedNotifications = localStorage.getItem('notifications')
             let sendEmail = false
             let userEmail: string | undefined
 
             if (savedNotifications) {
                 const prefs = JSON.parse(savedNotifications)
-                // Enviar email solo si ambas opciones están habilitadas
                 sendEmail = prefs.email && prefs.classification
             }
 
-            // Obtener email del usuario si se debe enviar notificación
             if (sendEmail) {
                 const userStr = localStorage.getItem('user')
                 if (userStr) {
@@ -141,6 +132,8 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                     userEmail = user.email
                 }
             }
+
+            console.log('[LOT-CLASSIFICATIONS] Iniciando clasificación...')
 
             const session = await classificationService.startClassificationSession(
                 lotId,
@@ -151,29 +144,33 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                 }
             )
 
-            // Guardar sesión completada para mostrar opciones
-            setCompletedSession(session)
+            console.log('[LOT-CLASSIFICATIONS] Clasificación completada:', session)
 
-            // Mostrar éxito
+            setCompletedSession(session)
             setShowSuccess(true)
 
-            // Mostrar toast de éxito
             toast.success('¡Clasificación completada!', {
                 description: `Se analizó el grano con éxito`,
             })
 
-            // Si se envió email, mostrar notificación
             if (sendEmail && userEmail) {
                 toast.success('📧 Reporte enviado por email', {
                     description: `El reporte fue enviado a ${userEmail}`,
                 })
             }
 
-            // Esperar 3 segundos antes de recargar
-            setTimeout(() => {
-                setIsUploadOpen(false)
-                loadData()
-            }, 3000)
+            // Esperar 4 segundos para que se complete la certificación en background
+            console.log('[LOT-CLASSIFICATIONS] Esperando certificación blockchain...')
+            await new Promise(resolve => setTimeout(resolve, 4000))
+
+            // Recargar datos
+            console.log('[LOT-CLASSIFICATIONS] Recargando datos...')
+            await loadData()
+
+            // Esperar 1 segundo más antes de cerrar
+            await new Promise(resolve => setTimeout(resolve, 1000))
+
+            setIsUploadOpen(false)
         } catch (err: any) {
             setError(err.message || "Error al procesar la imagen")
             setIsProcessing(false)
@@ -216,7 +213,6 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
     }
 
     const getSessionQuality = (session: ClassificationSession): number => {
-        // Prioridad 1: Obtener el score del primer análisis (grano individual)
         if (session.analyses && session.analyses.length > 0) {
             const firstAnalysis = session.analyses[0]
             if (firstAnalysis.final_score !== undefined && firstAnalysis.final_score !== null) {
@@ -224,14 +220,12 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
             }
         }
 
-        // Prioridad 2: overall_batch_quality
         const result = session.classification_result
         if (result?.overall_batch_quality !== undefined && result.overall_batch_quality !== null) {
             const value = result.overall_batch_quality
             return value <= 1 ? value * 100 : value
         }
 
-        // Prioridad 3: average_score
         if (result?.average_score !== undefined && result.average_score !== null) {
             return result.average_score * 100
         }
@@ -449,9 +443,11 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                                 )}
                             </div>
 
-                            <p className="text-xs text-center text-gray-500">
-                                Redirigiendo a los resultados...
-                            </p>
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                <p className="text-xs text-center text-blue-900">
+                                    ⏳ Generando certificación blockchain...
+                                </p>
+                            </div>
                         </div>
                     ) : isProcessing ? (
                         <div className="py-8 text-center">
@@ -491,7 +487,6 @@ export function LotClassifications({ lotId }: LotClassificationsProps) {
                                     </div>
                                 )}
 
-                                {/* Estado de notificaciones por email */}
                                 {emailNotificationsEnabled ? (
                                     <Alert className="bg-green-50 border-green-200">
                                         <CheckCircle2 className="h-4 w-4 text-green-600" />

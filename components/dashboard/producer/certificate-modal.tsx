@@ -1,15 +1,13 @@
-// components/dashboard/producer/certificate-modal.tsx
-
 "use client"
 
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Download, Loader2 } from "lucide-react"
+import { Download, ExternalLink, Loader2, Copy, Check, Package } from "lucide-react"
 import { ClassificationSession } from "@/lib/services/classification.service"
 import { certificateService } from "@/lib/services/certificate.service"
-import { CertificationHashDisplay } from "./certification-hash-display"
-import { useCertification } from "@/hooks/use-certification"
-import { useState, useEffect } from "react"
+import { toast } from "sonner"
+import { useRouter } from 'next/navigation'
 
 interface CertificateModalProps {
     sessions: ClassificationSession[]
@@ -19,216 +17,241 @@ interface CertificateModalProps {
 }
 
 export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeAction }: CertificateModalProps) {
-    const [qrImageUrl, setQrImageUrl] = useState<string>("")
-    const { certifications, loadCertificationsByLot, loading: loadingCert } = useCertification()
+    const router = useRouter()
+    const [qrUrl, setQrUrl] = useState<string>('')
+    const [copied, setCopied] = useState(false)
+    const [lotData, setLotData] = useState<any>(null)
 
-    // Cargar certificaciones del lote cuando se abre el modal
+    // Consolidar datos del lote cuando se abre el modal
     useEffect(() => {
-        if (open && coffeeLotId) {
-            loadCertificationsByLot(coffeeLotId)
+        if (open && sessions.length > 0) {
+            const consolidated = certificateService.consolidateLotData(sessions)
+            setLotData(consolidated)
+
+            // Generar QR con datos del lote
+            generateQRCode(consolidated)
         }
-    }, [open, coffeeLotId])
+    }, [open, sessions])
 
-    // Generar datos consolidados cuando se abre el modal
-    const handleOpen = (isOpen: boolean) => {
-        if (isOpen && sessions && sessions.length > 0) {
-            const lotData = certificateService.consolidateLotData(sessions)
-
-            // Agregar certificación si existe
-            if (certifications.length > 0) {
-                lotData.certification = certifications[0] // Usar la más reciente
-                lotData.blockchainHash = certifications[0].certification_hash
-            }
-
-            const url = certificateService.generateConsolidatedQRImageURL(lotData, 400)
-            setQrImageUrl(url)
+    const generateQRCode = (data: any) => {
+        // Crear URL con datos del lote para el QR
+        const qrData = {
+            type: 'BeanDetect_Certificate',
+            lot_id: data.coffeeLotId,
+            total_grains: data.totalGrainsAnalyzed,
+            sessions: data.totalSessions,
+            quality: data.averageQuality.toFixed(1),
+            category: data.predominantCategory,
+            date: new Date().toISOString(),
+            // URL para ver detalles completos (usa la ruta existente)
+            details_url: `${window.location.origin}/dashboard/producer/batches/${data.coffeeLotId}/classifications`
         }
-        onOpenChangeAction(isOpen)
+
+        const encoded = encodeURIComponent(JSON.stringify(qrData))
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encoded}`
+        setQrUrl(qrImageUrl)
     }
 
-    const handleDownloadPDF = () => {
-        if (sessions && sessions.length > 0) {
-            const lotData = certificateService.consolidateLotData(sessions)
-            if (certifications.length > 0) {
-                lotData.certification = certifications[0]
-                lotData.blockchainHash = certifications[0].certification_hash
-            }
-            certificateService.generateConsolidatedPDF(lotData)
+    const handleDownloadPDF = async () => {
+        if (lotData) {
+            await certificateService.generateConsolidatedPDF(lotData)
         }
     }
 
     const handleDownloadCSV = () => {
-        if (sessions && sessions.length > 0) {
-            const lotData = certificateService.consolidateLotData(sessions)
-            if (certifications.length > 0) {
-                lotData.certification = certifications[0]
-                lotData.blockchainHash = certifications[0].certification_hash
-            }
+        if (lotData) {
             certificateService.generateConsolidatedCSV(lotData)
         }
     }
 
-    if (!sessions || sessions.length === 0) {
-        return null
+    const handleViewDetails = () => {
+        // Redirigir a las clasificaciones del lote (ya existe)
+        router.push(`/dashboard/producer/batches/${coffeeLotId}/classifications`)
+        onOpenChangeAction(false)
     }
 
-    // Calcular datos consolidados para mostrar
-    const lotData = certificateService.consolidateLotData(sessions)
-    const hasCertification = certifications.length > 0
+    const copyToClipboard = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text)
+            setCopied(true)
+            toast.success('Copiado al portapapeles')
+            setTimeout(() => setCopied(false), 2000)
+        } catch (err) {
+            toast.error('Error al copiar')
+        }
+    }
+
+    if (!lotData) {
+        return (
+            <Dialog open={open} onOpenChange={onOpenChangeAction}>
+                <DialogContent className="max-w-2xl">
+                    <div className="flex flex-col items-center justify-center py-12">
+                        <Loader2 className="h-12 w-12 animate-spin text-amber-700 mb-4" />
+                        <p className="text-sm text-gray-600">Cargando certificado...</p>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        )
+    }
+
+    // Generar ID único del certificado
+    const certificateId = `CERT-${lotData.coffeeLotId}-${Date.now().toString(36).toUpperCase()}`
 
     return (
-        <Dialog open={open} onOpenChange={handleOpen}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <Dialog open={open} onOpenChange={onOpenChangeAction}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Certificado del Lote #{coffeeLotId}</DialogTitle>
+                    <DialogTitle>Certificado de Trazabilidad</DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-6">
-                    {/* Certificación Blockchain */}
-                    {loadingCert && (
-                        <div className="flex items-center justify-center py-8">
-                            <Loader2 className="h-8 w-8 animate-spin text-amber-700" />
-                            <span className="ml-2 text-gray-600">Cargando certificación...</span>
-                        </div>
-                    )}
-
-                    {!loadingCert && hasCertification && (
-                        <CertificationHashDisplay
-                            certification={certifications[0]}
-                            showUnlockButton={true}
-                        />
-                    )}
-
-                    {!loadingCert && !hasCertification && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                            <p className="text-sm text-yellow-900">
-                                ⚠️ Este lote aún no tiene certificación blockchain.
-                                La certificación se genera automáticamente al completar clasificaciones.
-                            </p>
-                        </div>
-                    )}
-
                     {/* QR Code */}
                     <div className="flex justify-center">
-                        <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
-                            {qrImageUrl ? (
+                        <div className="border-4 border-amber-700 rounded-lg p-4 bg-white">
+                            {qrUrl ? (
                                 <img
-                                    src={qrImageUrl}
-                                    alt="QR Code del Lote"
+                                    src={qrUrl}
+                                    alt="QR de certificación"
                                     className="w-64 h-64"
                                 />
                             ) : (
-                                <div className="w-64 h-64 bg-gray-100 animate-pulse rounded" />
+                                <div className="w-64 h-64 bg-gray-100 flex items-center justify-center">
+                                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                                </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Información Consolidada */}
-                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    {/* Certificate Info */}
+                    <div className="space-y-4">
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Package className="h-5 w-5 text-green-600" />
+                                <span className="font-semibold text-green-900">Certificado Activo</span>
+                            </div>
+                            <p className="text-sm text-green-800">
+                                Este certificado contiene información verificable del lote de café
+                            </p>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <p className="text-xs text-gray-500">Lote de Café</p>
-                                <p className="font-semibold text-gray-900">#{coffeeLotId}</p>
+                                <p className="text-xs text-gray-600 mb-1">ID de Certificado</p>
+                                <code className="text-sm font-mono bg-gray-100 px-2 py-1 rounded block break-all">
+                                    {certificateId}
+                                </code>
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500">Total de Granos</p>
-                                <p className="font-semibold text-gray-900">{lotData.totalGrainsAnalyzed}</p>
+                                <p className="text-xs text-gray-600 mb-1">Lote de Café</p>
+                                <p className="text-sm font-semibold">#{lotData.coffeeLotId}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500">Sesiones Realizadas</p>
-                                <p className="font-semibold text-gray-900">{lotData.totalSessions}</p>
+                                <p className="text-xs text-gray-600 mb-1">Granos Analizados</p>
+                                <p className="text-sm font-semibold">{lotData.totalGrainsAnalyzed}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500">Calidad Promedio</p>
-                                <p className="font-semibold text-amber-700">{lotData.averageQuality.toFixed(1)}%</p>
+                                <p className="text-xs text-gray-600 mb-1">Sesiones</p>
+                                <p className="text-sm font-semibold">{lotData.totalSessions}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500">Categoría Predominante</p>
-                                <p className="font-semibold text-gray-900">{lotData.predominantCategory}</p>
+                                <p className="text-xs text-gray-600 mb-1">Calidad Promedio</p>
+                                <p className="text-sm font-semibold text-amber-700">
+                                    {lotData.averageQuality.toFixed(1)}%
+                                </p>
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500">Período de Análisis</p>
-                                <p className="font-semibold text-gray-900 text-xs">
-                                    {new Date(lotData.firstClassificationDate).toLocaleDateString('es-PE', {
-                                        day: '2-digit',
-                                        month: 'short'
-                                    })} - {new Date(lotData.lastClassificationDate).toLocaleDateString('es-PE', {
-                                    day: '2-digit',
-                                    month: 'short',
-                                    year: 'numeric'
-                                })}
+                                <p className="text-xs text-gray-600 mb-1">Categoría</p>
+                                <p className="text-sm font-semibold">
+                                    {lotData.predominantCategory}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-600 mb-1">Primera Clasificación</p>
+                                <p className="text-sm font-semibold">
+                                    {new Date(lotData.firstClassification).toLocaleDateString('es-PE')}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-600 mb-1">Última Clasificación</p>
+                                <p className="text-sm font-semibold">
+                                    {new Date(lotData.lastClassification).toLocaleDateString('es-PE')}
                                 </p>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Distribución de Calidad */}
-                    <div className="space-y-2">
-                        <h4 className="text-sm font-semibold text-gray-900">Distribución de Calidad</h4>
-                        <div className="grid grid-cols-5 gap-2">
-                            <div className="text-center p-2 bg-emerald-50 rounded border border-emerald-200">
-                                <p className="text-xs text-gray-600">Specialty</p>
-                                <p className="font-bold text-emerald-700">{lotData.categoryDistribution.Specialty.count}</p>
-                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.Specialty.percentage.toFixed(1)}%</p>
+                        {/* Distribution */}
+                        <div>
+                            <p className="text-sm font-semibold text-gray-900 mb-3">Distribución de Calidad</p>
+                            <div className="space-y-2">
+                                {Object.entries(lotData.categoryDistribution).map(([category, data]: [string, any]) => {
+                                    if (data.count === 0) return null
+                                    return (
+                                        <div key={category} className="flex items-center justify-between text-sm">
+                                            <span className="text-gray-700">{category}</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-gray-600">{data.count} granos</span>
+                                                <span className="font-semibold text-gray-900">{data.percentage.toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
                             </div>
-                            <div className="text-center p-2 bg-green-50 rounded border border-green-200">
-                                <p className="text-xs text-gray-600">Premium</p>
-                                <p className="font-bold text-green-700">{lotData.categoryDistribution.Premium.count}</p>
-                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.Premium.percentage.toFixed(1)}%</p>
-                            </div>
-                            <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
-                                <p className="text-xs text-gray-600">A</p>
-                                <p className="font-bold text-blue-700">{lotData.categoryDistribution.A.count}</p>
-                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.A.percentage.toFixed(1)}%</p>
-                            </div>
-                            <div className="text-center p-2 bg-amber-50 rounded border border-amber-200">
-                                <p className="text-xs text-gray-600">B</p>
-                                <p className="font-bold text-amber-700">{lotData.categoryDistribution.B.count}</p>
-                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.B.percentage.toFixed(1)}%</p>
-                            </div>
-                            <div className="text-center p-2 bg-red-50 rounded border border-red-200">
-                                <p className="text-xs text-gray-600">C</p>
-                                <p className="font-bold text-red-700">{lotData.categoryDistribution.C.count}</p>
-                                <p className="text-xs text-gray-500">{lotData.categoryDistribution.C.percentage.toFixed(1)}%</p>
+                        </div>
+
+                        {/* Certificate ID for copying */}
+                        <div>
+                            <p className="text-xs text-gray-600 mb-2">URL de Acceso Rápido</p>
+                            <div className="flex items-center gap-2">
+                                <code className="flex-1 text-xs font-mono bg-gray-100 px-3 py-2 rounded break-all">
+                                    {`${window.location.origin}/dashboard/producer/batches/${lotData.coffeeLotId}/classifications`}
+                                </code>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => copyToClipboard(`${window.location.origin}/dashboard/producer/batches/${lotData.coffeeLotId}/classifications`)}
+                                >
+                                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                </Button>
                             </div>
                         </div>
                     </div>
 
-                    {/* Descripción */}
-                    <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-                        <p className="font-medium text-blue-900 mb-1">💡 Sobre este certificado</p>
-                        <p className="text-xs">
-                            Este certificado consolida el análisis de <strong>{lotData.totalGrainsAnalyzed} granos</strong> del Lote #{coffeeLotId},
-                            procesados en <strong>{lotData.totalSessions} sesiones de clasificación</strong>.
-                            {hasCertification && " El certificado está protegido con hash blockchain inmutable para garantizar su autenticidad."}
-                            {!hasCertification && " La certificación blockchain se generará automáticamente al completar más clasificaciones."}
+                    {/* Actions */}
+                    <div className="flex flex-col gap-2">
+                        <Button
+                            onClick={handleViewDetails}
+                            className="w-full bg-amber-700 hover:bg-amber-800"
+                        >
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            Ver Todas las Clasificaciones del Lote
+                        </Button>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={handleDownloadPDF}
+                            >
+                                <Download className="h-4 w-4 mr-2" />
+                                PDF Consolidado
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={handleDownloadCSV}
+                            >
+                                <Download className="h-4 w-4 mr-2" />
+                                CSV Consolidado
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p className="text-xs text-blue-900">
+                            <strong>Trazabilidad:</strong> Este certificado consolida todas las clasificaciones
+                            realizadas para este lote de café. El código QR contiene información verificable
+                            que puede ser escaneada para acceder a los detalles completos.
                         </p>
                     </div>
-
-                    {/* Botones de Acción */}
-                    <div className="flex gap-3">
-                        <Button
-                            onClick={handleDownloadPDF}
-                            className="flex-1 bg-amber-700 hover:bg-amber-800"
-                        >
-                            <Download className="h-4 w-4 mr-2" />
-                            Descargar PDF
-                        </Button>
-                        <Button
-                            onClick={handleDownloadCSV}
-                            variant="outline"
-                            className="flex-1"
-                        >
-                            <Download className="h-4 w-4 mr-2" />
-                            Descargar CSV
-                        </Button>
-                    </div>
-
-                    {/* Nota sobre el QR */}
-                    <p className="text-xs text-gray-500 text-center">
-                        Escanea el código QR para ver los detalles completos del lote
-                        {hasCertification && " y verificar el hash blockchain"}
-                    </p>
                 </div>
             </DialogContent>
         </Dialog>

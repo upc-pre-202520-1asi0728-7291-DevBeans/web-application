@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Download, QrCode, TrendingUp, AlertCircle, Loader2, Package } from "lucide-react"
@@ -8,6 +8,7 @@ import { useClassificationReports } from "@/hooks/use-classification-reports"
 import { CertificateModal } from "@/components/dashboard/producer/certificate-modal"
 import { ClassificationSession } from "@/lib/services/classification.service"
 import { certificateService } from "@/lib/services/certificate.service"
+import { certificationService } from "@/lib/services/certification.service"
 
 interface ProducerReportsProps {
   coffeeLotId?: number
@@ -28,6 +29,7 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
   const { data, loading, error } = useClassificationReports(coffeeLotId)
   const [selectedLot, setSelectedLot] = useState<ConsolidatedLot | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [loadingCerts, setLoadingCerts] = useState(false)
 
   // Agrupar sesiones por lote
   const consolidatedLots = useMemo(() => {
@@ -35,7 +37,6 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
 
     const lotMap = new Map<number, ClassificationSession[]>()
 
-    // Agrupar sesiones por coffee_lot_id
     data.sessions.forEach(session => {
       if (session.status === 'COMPLETED') {
         const existing = lotMap.get(session.coffee_lot_id) || []
@@ -43,7 +44,6 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
       }
     })
 
-    // Convertir a array de lotes consolidados
     const consolidated: ConsolidatedLot[] = []
 
     lotMap.forEach((sessions, lotId) => {
@@ -51,7 +51,6 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
       const totalScore = allAnalyses.reduce((sum, a) => sum + a.final_score, 0)
       const averageQuality = allAnalyses.length > 0 ? (totalScore / allAnalyses.length) * 100 : 0
 
-      // Calcular categoría predominante
       const categoryCount: Record<string, number> = {}
       allAnalyses.forEach(a => {
         categoryCount[a.final_category] = (categoryCount[a.final_category] || 0) + 1
@@ -60,7 +59,6 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
           a[1] > b[1] ? a : b
       )[0] || 'N/A'
 
-      // Fechas
       const dates = sessions.map(s => new Date(s.created_at).getTime())
 
       consolidated.push({
@@ -74,7 +72,6 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
       })
     })
 
-    // Ordenar por fecha más reciente
     return consolidated.sort((a, b) =>
         new Date(b.lastClassification).getTime() - new Date(a.lastClassification).getTime()
     )
@@ -85,9 +82,23 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
     setModalOpen(true)
   }
 
-  const handleQuickDownload = (lot: ConsolidatedLot) => {
-    const lotData = certificateService.consolidateLotData(lot.sessions)
-    certificateService.generateConsolidatedPDF(lotData)
+  const handleQuickDownload = async (lot: ConsolidatedLot) => {
+    setLoadingCerts(true)
+    try {
+      const lotData = certificateService.consolidateLotData(lot.sessions)
+
+      // Cargar certificación
+      const certs = await certificationService.getCertificationsByLot(lot.coffeeLotId)
+      if (certs.length > 0) {
+        lotData.certification = certs[0]
+      }
+
+      await certificateService.generateConsolidatedPDF(lotData)
+    } catch (err) {
+      console.error('Error generating PDF:', err)
+    } finally {
+      setLoadingCerts(false)
+    }
   }
 
   const handleDownloadCSV = (lot: ConsolidatedLot) => {
@@ -142,7 +153,6 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
     return null
   }
 
-  // Calculate percentages for quality distribution
   const totalGrains = data.totalGrainsAnalyzed
   const qualityPercentages = totalGrains > 0 ? {
     Specialty: (data.qualityDistribution.Specialty / totalGrains) * 100,
@@ -350,7 +360,6 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
           <CardContent>
             {data.defects.totalDefects > 0 ? (
                 <div className="space-y-3">
-                  {/* Dark/Black Grains */}
                   {data.defects.darkGrains > 0 && (
                       <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                         <div className="flex items-center gap-3">
@@ -366,7 +375,6 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
                       </div>
                   )}
 
-                  {/* Green Grains */}
                   {data.defects.greenGrains > 0 && (
                       <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
                         <div className="flex items-center gap-3">
@@ -438,8 +446,13 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
                           size="sm"
                           className="bg-amber-700 hover:bg-amber-800"
                           onClick={() => handleQuickDownload(lot)}
+                          disabled={loadingCerts}
                       >
-                        <Download className="h-4 w-4 mr-2" />
+                        {loadingCerts ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                            <Download className="h-4 w-4 mr-2" />
+                        )}
                         PDF
                       </Button>
                       <Button
@@ -462,7 +475,7 @@ export function ProducerReports({ coffeeLotId }: ProducerReportsProps) {
           </CardContent>
         </Card>
 
-        {/* Certificate Modal - Consolidado por lote */}
+        {/* Certificate Modal */}
         {selectedLot && (
             <CertificateModal
                 sessions={selectedLot.sessions}
