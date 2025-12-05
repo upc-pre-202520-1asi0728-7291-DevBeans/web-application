@@ -3,39 +3,53 @@
 import { BaseService, API_BASE_URL } from './base.service';
 
 
-export interface ProducerProfile {
-    id: number;
-    user_id: number;
-    first_name: string;
-    last_name: string;
-    document_number: string;
-    document_type: string;
-    phone_number: string;
-    city: string;
-    country: string;
-    farm_name: string;
-    latitude: number;
-    longitude: number;
-    altitude: number | null;
-    region: string;
-    hectares: number;
-    coffee_varieties: string[] | null;
-    production_capacity: number | null;
+/**
+ * Base profile interface con propiedades comunes
+ */
+export interface BaseProfile {
+    phone_number: string
+    city: string
+    country?: string
 }
 
-export interface CooperativeProfile {
-    id: number;
-    user_id: number;
-    cooperative_name: string;
-    legal_registration_number: string;
-    phone_number: string;
-    address: string;
-    city: string;
-    country: string;
-    legal_representative_name: string;
-    legal_representative_email: string;
-    processing_capacity: number | null;
-    certifications: string[] | null;
+
+/**
+ * Producer Profile
+ */
+export interface ProducerProfile extends BaseProfile {
+    user_id: number
+    first_name: string
+    last_name: string
+    document_number: string
+    document_type: string
+    alternative_phone?: string
+    address?: string
+    farm_name: string
+    latitude: number
+    longitude: number
+    altitude?: number
+    region: string
+    hectares: number
+    coffee_varieties?: string[]
+    production_capacity?: number
+    email?: string // Agregado para el frontend
+}
+
+
+/**
+ * Cooperative Profile
+ */
+export interface CooperativeProfile extends BaseProfile {
+    user_id: number
+    cooperative_name: string
+    legal_registration_number: string
+    alternative_phone?: string
+    address: string
+    legal_representative_name: string
+    legal_representative_email: string
+    processing_capacity?: number
+    certifications?: string[]
+    associated_producers?: number[]
 }
 
 
@@ -67,6 +81,9 @@ export interface UserResource {
  * User Service for handling user profiles and related operations
  */
 class UserService extends BaseService {
+    /**
+     * Get user profile (Producer or Cooperative)
+     */
     async getProfile(userId: number): Promise<ProducerProfile | CooperativeProfile> {
         const response = await fetch(`${API_BASE_URL}/api/v1/profiles/${userId}`, {
             headers: this.getAuthHeaders(),
@@ -74,18 +91,31 @@ class UserService extends BaseService {
         return this.handleResponse<ProducerProfile | CooperativeProfile>(response);
     }
 
-    async getProducerProfile(userId: number): Promise<ProducerProfile> {
-        const response = await fetch(`${API_BASE_URL}/api/v1/profiles/producer/${userId}`, {
-            headers: this.getAuthHeaders(),
-        });
-        return this.handleResponse<ProducerProfile>(response);
-    }
+    /**
+     * Obtener todos los productores (para cooperativas)
+     */
+    async getAllProducers(): Promise<ProducerProfile[]> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/users/producers`, {
+                headers: this.getAuthHeaders()
+            })
 
-    async getCooperativeProfile(userId: number): Promise<CooperativeProfile> {
-        const response = await fetch(`${API_BASE_URL}/api/v1/profiles/cooperative/${userId}`, {
-            headers: this.getAuthHeaders(),
-        });
-        return this.handleResponse<CooperativeProfile>(response);
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ detail: 'Error al cargar productores' }))
+                throw new Error(error.detail)
+            }
+
+            const producers = await response.json()
+
+            // Enriquecer con email del usuario si es necesario
+            return producers.map((producer: any) => ({
+                ...producer,
+                email: producer.email || `producer${producer.user_id}@example.com` // Fallback
+            }))
+        } catch (error) {
+            console.error('Error getting all producers:', error)
+            throw error
+        }
     }
 
 
