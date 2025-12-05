@@ -222,7 +222,7 @@ export function ProducerManagement() {
 
                       <Button
                           variant="outline"
-                          className="w-full bg-transparent hover:bg-amber-50"
+                          className="w-full bg-transparent hover:bg-amber-700"
                           onClick={() => handleViewDetails(producer.user_id)}
                       >
                         <Eye className="h-4 w-4 mr-2" />
