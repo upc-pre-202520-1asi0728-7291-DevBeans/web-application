@@ -138,13 +138,6 @@ export function CooperativeReports() {
               Análisis y estadísticas de toda la cooperativa
             </p>
           </div>
-          <Button
-              className="bg-amber-700 hover:bg-amber-800"
-              onClick={handleExportReport}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Exportar Reporte
-          </Button>
         </div>
 
         {/* Error */}

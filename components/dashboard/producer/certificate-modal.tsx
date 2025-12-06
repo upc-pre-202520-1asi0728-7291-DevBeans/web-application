@@ -8,6 +8,7 @@ import { ClassificationSession } from "@/lib/services/classification.service"
 import { certificateService } from "@/lib/services/certificate.service"
 import { certificationService } from "@/lib/services/certification.service"
 import { authService } from "@/lib/services/auth.service"
+import { PublishToBlockchain } from "@/components/dashboard/PublishToBlockchain"
 import { toast } from "sonner"
 import { useRouter } from 'next/navigation'
 
@@ -324,6 +325,21 @@ export function CertificateModal({ sessions, coffeeLotId, open, onOpenChangeActi
                             </div>
                         )}
                     </div>
+
+                    {/* Blockchain Publish - Solo para COOPERATIVE */}
+                    {userRole === 'COOPERATIVE' && certification && (
+                        <div className="border-t pt-4">
+                            <PublishToBlockchain
+                                certification={certification}
+                                onPublished={(result) => {
+                                    console.log('✅ Published to blockchain:', result)
+                                    toast.success('¡Certificado publicado en blockchain!', {
+                                        description: 'El certificado es ahora inmutable y verificable públicamente'
+                                    })
+                                }}
+                            />
+                        </div>
+                    )}
 
                     {/* Actions */}
                     <div className="flex flex-col gap-2">
